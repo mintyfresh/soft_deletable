@@ -8,6 +8,7 @@ gemspec
 gem 'annotaterb'
 gem 'factory_bot_rails'
 gem 'faker'
+gem 'pg'
 gem 'puma'
 gem 'rspec-rails', require: false
 gem 'rubocop', require: false
