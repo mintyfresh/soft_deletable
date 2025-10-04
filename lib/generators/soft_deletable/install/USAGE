@@ -1,0 +1,8 @@
+Description:
+    Creates a configuration file for SoftDeletable.
+
+Example:
+    bin/rails generate soft_deletable:install
+
+    This will create:
+        config/initializers/soft_deletable.rb
