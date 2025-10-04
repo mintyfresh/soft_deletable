@@ -6,9 +6,10 @@ on:
     branches: [main]
 
 jobs:
-  build:
+  rubocop:
+    name: Rubocop
     runs-on: ubuntu-latest
-    name: Ruby ${{ matrix.ruby }}
+
     strategy:
       matrix:
         ruby:
@@ -16,9 +17,6 @@ jobs:
           - '3.3.9'
           - '3.4.6'
 
-  rubocop:
-    name: Rubocop
-    runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v4
       with:
@@ -34,6 +32,14 @@ jobs:
   rspec_sqlite:
     name: RSpec (SQLite)
     runs-on: ubuntu-latest
+
+    strategy:
+      matrix:
+        ruby:
+          - '3.2.9'
+          - '3.3.9'
+          - '3.4.6'
+
     steps:
       - uses: actions/checkout@v4
         with:
@@ -52,7 +58,7 @@ jobs:
   rspec_postgresql:
     name: RSpec (PostgreSQL)
     runs-on: ubuntu-latest
-
+    
     services:
       postgres:
         image: postgres:17.6
@@ -67,6 +73,13 @@ jobs:
           --health-interval 10s
           --health-timeout 5s
           --health-retries 5
+
+    strategy:
+      matrix:
+        ruby:
+          - '3.2.9'
+          - '3.3.9'
+          - '3.4.6'
 
     steps:
       - uses: actions/checkout@v4
