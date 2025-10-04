@@ -16,5 +16,5 @@ SoftDeletable.configure do |config|
   # The class name of the user model used by the `belongs_to :deleted_by` association.
   # Defaults to `'User'`.
   #
-  config.user_class_name = 'User'
+  # config.user_class_name = 'User'
 end
