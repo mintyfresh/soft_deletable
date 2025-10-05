@@ -1,8 +1,5 @@
 # SoftDeletable
-Short description and motivation.
-
-## Usage
-How to use my plugin.
+Manages soft-deletion of records, with cascading soft-deletion and restoration of associations.
 
 ## Installation
 Add this line to your application's Gemfile:
@@ -128,6 +125,40 @@ add_soft_deletable(
   foreign_key: { to_table: :users }
 )
 ```
+
+### Soft-Deletion
+
+The `destroy`, `destroy!`, and `delete` methods are override for soft-deletable models to trigger soft-deletion.
+
+For example, in a controlller, you might call these as:
+```ruby
+class ProductsController
+  # ...
+
+  def destroy
+    @product.destroy!
+    head :no_content
+  end
+end
+```
+
+However, it may be advantageous to track who deleted this record (ie. the `current_user`).
+Furthermore, while a `deleted_in` value is automatically generated for the operation, there may be advantage to linking
+the request ID back to this deletion (e.g. for future auditing or correlation with an APM):
+```ruby
+class ProductsController
+  # ...
+
+  def destroy
+    @product.destroy!(deleted_by: current_user, deleted_in: request.request_id)
+    head :no_content
+  end
+end
+```
+
+In addition, `restore`, `restore!`, and `undelete` are available as corresponding to the above methods,
+to restore a previously soft-deleted record. With the exception of `undelete` (which corresponds to `delete` and thus does not fire callbacks),
+these will also cascade un-deletion to their associations. See more in the section about dependent associations.
 
 ### Helpers
 
