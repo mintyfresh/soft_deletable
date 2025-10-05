@@ -129,6 +129,25 @@ add_soft_deletable(
 )
 ```
 
+### Helpers
+
+The following helpers are available to soft-deletable models:
+* `deleted?` AND `deleted` - Attribute readers for the virtual `deleted` attribute (depends on the state of `deleted_at`)
+* `deleted=` - Attribute writer for virtual `deleted` attribute
+* `deleted_was`, `deleted_before_last_save`, `deleted_changed?`, and `saved_change_to_deleted?` - Attribute dirty-ness checks for virtual `deleted` attribute
+
+### Callbacks
+
+The following model callbacks are available to soft-deletable models:
+* `before_soft_delete` - Triggered before a soft-deletable model is saved into its deleted state
+* `after_soft_delete` - Same as above, but occurs after save
+* `before_restore` - Triggered before a soft-deletable model is saved into its non-deleted state from its deleted state
+* `after_restore` - Same as above, but occurs after save
+
+In addition, the following transaction-level commit callbacks are available:
+* `after_soft_delete_commit` - Triggered after a transction is committed in which the soft-deletable model was deleted
+* `after_soft_delete_commit` - Triggered after a transction is committed in which the soft-deletable model was restored
+
 ### Dependent Associations
 
 When using `has_one` and `has_many` associations, the following `dependent:` behaviours are supported for soft-deletable models:

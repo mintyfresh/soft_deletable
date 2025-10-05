@@ -59,7 +59,10 @@ module SoftDeletable
     # @return [void]
     def deleted=(value)
       if ActiveRecord::Type::Boolean.new.cast(value)
-        self.deleted_at ||= Time.current
+        unless deleted?
+          self.deleted_at = Time.current
+          self.deleted_in = SecureRandom.uuid
+        end
       else
         self.deleted_at = nil
       end
