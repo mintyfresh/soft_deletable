@@ -1,7 +1,7 @@
 # frozen_string_literal: true
 
 module SoftDeletable
-  class InstallGenerator < Rails::Generators::NamedBase
+  class InstallGenerator < Rails::Generators::Base
     source_root File.expand_path('templates', __dir__)
 
     def copy_soft_deletable_rb
