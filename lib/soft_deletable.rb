@@ -7,6 +7,7 @@ require 'soft_deletable/engine'
 module SoftDeletable
   autoload :AssociationExtensions, 'soft_deletable/association_extensions'
   autoload :MigrationExtensions, 'soft_deletable/migration_extensions'
+  autoload :TableDefinitionExtensions, 'soft_deletable/table_definition_extensions'
   autoload :TableExtensions, 'soft_deletable/table_extensions'
 
   def self.included(base)

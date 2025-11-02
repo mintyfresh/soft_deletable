@@ -28,7 +28,7 @@ module SoftDeletable
     initializer 'soft_deletable.migration_extensions' do
       ActiveSupport.on_load(:active_record) do
         ActiveRecord::Migration.include SoftDeletable::MigrationExtensions
-        ActiveRecord::ConnectionAdapters::TableDefinition.include SoftDeletable::TableExtensions
+        ActiveRecord::ConnectionAdapters::TableDefinition.include SoftDeletable::TableDefinitionExtensions
         ActiveRecord::ConnectionAdapters::Table.include SoftDeletable::TableExtensions
       end
     end

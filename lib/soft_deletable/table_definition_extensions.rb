@@ -1,7 +1,7 @@
 # frozen_string_literal: true
 
 module SoftDeletable
-  module TableExtensions
+  module TableDefinitionExtensions
     # @param deleted_at_type [Symbol]
     # @param deleted_in_type [Symbol]
     # @param deleted_by_type [Symbol]
@@ -24,12 +24,12 @@ module SoftDeletable
 
     # @return [Symbol]
     def default_deleted_in_type
-      SoftDeletable.supports_uuid_columns?(@base.delegate) ? :uuid : :string
+      SoftDeletable.supports_uuid_columns?(@conn || self) ? :uuid : :string
     end
 
     # @return [Symbol]
     def default_deleted_by_type
-      SoftDeletable.default_primary_key_type(@base.delegate)
+      SoftDeletable.default_primary_key_type(@conn || self)
     end
 
     # @return [Hash]
