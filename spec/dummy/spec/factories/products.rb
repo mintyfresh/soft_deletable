@@ -37,6 +37,10 @@ FactoryBot.define do
       deleted_by { build(:user) }
     end
 
+    trait :with_inventory do
+      inventory { build(:product_inventory, product: instance) }
+    end
+
     trait :with_variants do
       transient do
         variants_count { 3 }

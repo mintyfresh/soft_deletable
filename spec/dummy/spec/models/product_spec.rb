@@ -72,6 +72,18 @@ RSpec.describe Product, type: :model do
       end
     end
 
+    context 'with an associated inventory' do
+      let(:product) { create(:product, :with_inventory) }
+
+      it 'soft-deletes the inventory', :aggregate_failures do
+        expect(destroy).to be_truthy
+        expect(product.inventory).to be_deleted.and have_attributes(
+          deleted_in: product.deleted_in,
+          deleted_by: product.deleted_by
+        )
+      end
+    end
+
     context 'with associated variants' do
       let(:product) { create(:product, :with_variants) }
 
@@ -111,6 +123,30 @@ RSpec.describe Product, type: :model do
             deleted_by: product.deleted_by
           )
         end
+      end
+    end
+  end
+
+  describe '#save' do
+    subject(:save) { product.save }
+
+    context 'when the record is created in a deleted state' do
+      let(:product) { build(:product, :deleted, :with_inventory, :with_variants) }
+
+      it 'soft-deletes the inventory', :aggregate_failures do
+        expect(save).to be_truthy
+        expect(product.inventory).to be_persisted.and be_deleted.and have_attributes(
+          deleted_in: product.deleted_in,
+          deleted_by: product.deleted_by
+        )
+      end
+
+      it 'soft-deletes all the variants', :aggregate_failures do
+        expect(save).to be_truthy
+        expect(product.variants).to all be_persisted.and be_deleted.and have_attributes(
+          deleted_in: product.deleted_in,
+          deleted_by: product.deleted_by
+        )
       end
     end
   end

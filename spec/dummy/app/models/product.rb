@@ -31,6 +31,8 @@ class Product < ApplicationRecord
 
   has_many :variants, class_name: 'ProductVariant', dependent: :destroy, inverse_of: :product
 
+  has_one :inventory, class_name: 'ProductInventory', dependent: :destroy, inverse_of: :product
+
   validates :name, presence: true
   validates :price_cents, presence: true, numericality: { greater_than: 0 }
 end

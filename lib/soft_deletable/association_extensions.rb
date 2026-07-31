@@ -129,7 +129,13 @@ module SoftDeletable
         return unless record # Nothing to do if there's no associated record to delete
 
         attributes = { deleted_by: owner.deleted_by, deleted_in: owner.deleted_in }
-        send(:"cascade_soft_delete_for_dependent_#{options[:dependent]}", record, **attributes)
+
+        if owner.persisted?
+          send(:"cascade_soft_delete_for_dependent_#{options[:dependent]}", record, **attributes)
+        else
+          # handle the case where a record is created in a deleted state
+          cascade_soft_delete_for_unpersisted_records(record, **attributes)
+        end
       end
 
       # Called when an owner of a has_one association is restored.
@@ -173,6 +179,13 @@ module SoftDeletable
       # @return [void]
       def cascade_soft_delete_for_dependent_delete(record, **attributes)
         record.delete(**attributes)
+      end
+
+      # @param record [ActiveRecord::Base]
+      # @param attributes [Hash]
+      # @return [void]
+      def cascade_soft_delete_for_unpersisted_records(record, **attributes)
+        record.mark_for_destruction(**attributes)
       end
 
       # @return [Boolean]
