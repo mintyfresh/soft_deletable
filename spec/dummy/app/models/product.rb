@@ -25,13 +25,12 @@
 #  deleted_by_id  (deleted_by_id => users.id)
 #
 class Product < ApplicationRecord
+  include Inventoriable
   include SoftDeletable::Model
 
   belongs_to :created_by, class_name: 'User', inverse_of: :created_products
 
   has_many :variants, class_name: 'ProductVariant', dependent: :destroy, inverse_of: :product
-
-  has_one :inventory, class_name: 'ProductInventory', dependent: :destroy, inverse_of: :product
 
   validates :name, presence: true
   validates :price_cents, presence: true, numericality: { greater_than: 0 }

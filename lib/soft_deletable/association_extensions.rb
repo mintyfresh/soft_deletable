@@ -2,6 +2,22 @@
 
 module SoftDeletable
   module AssociationExtensions
+    class << self
+      def install_dependency_callbacks(model, association_name)
+        model.before_soft_delete(-> (o) { o.association(association_name).handle_soft_delete_dependency })
+        model.after_restore(-> (o) { o.association(association_name).handle_restore_dependency })
+      end
+
+      def install_dependency_callbacks_for_declared_associations(model)
+        model.reflect_on_all_associations.each do |reflection|
+          next if reflection.options[:dependent].blank?
+          next unless reflection.association_class.method_defined?(:handle_soft_delete_dependency)
+
+          install_dependency_callbacks(model, reflection.name)
+        end
+      end
+    end
+
     module HasManyExtension
       DEFAULT_DESTROY_ASSOCIATION_ASYNC_BATCH_SIZE = 1000
       SUPPORTED_DEPENDENTS_FOR_SOFT_DELETE = %i[destroy destroy_async delete_all].freeze
@@ -220,11 +236,8 @@ module SoftDeletable
         def add_destroy_callbacks(model, reflection)
           result = super
 
-          if model.try(:soft_deletable?)
-            name = reflection.name
-            model.before_soft_delete(-> (o) { o.association(name).handle_soft_delete_dependency })
-            model.after_restore(-> (o) { o.association(name).handle_restore_dependency })
-          end
+          model.try(:soft_deletable?) and
+            AssociationExtensions.install_dependency_callbacks(model, reflection.name)
 
           result
         end

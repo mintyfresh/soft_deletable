@@ -23,6 +23,8 @@ module SoftDeletable
       scope :deleted, -> { where.not(deleted_at: nil) }
       scope :not_deleted, -> { where(deleted_at: nil) }
       scope :unscope_deleted, -> { unscope(where: :deleted_at) }
+
+      SoftDeletable::AssociationExtensions.install_dependency_callbacks_for_declared_associations(self)
     end
 
     class_methods do
