@@ -7,11 +7,12 @@ module SoftDeletable
   class SoftDeleteAsyncJob < ApplicationJob
     queue_as SoftDeletable.config.delete_job_queue
 
-    # @param model_name [String]
-    # @param ids [Array<Integer, String>]
-    # @param deleted_by [ActiveRecord::Base, nil]
-    # @param deleted_in [String, nil]
-    # @return [void]
+    #: (
+    #|   String model_name,
+    #|   Array[Integer | String] ids,
+    #|   ?deleted_by: ActiveRecord::Base?,
+    #|   ?deleted_in: String?
+    #| ) -> void
     def perform(model_name, ids, deleted_by: nil, deleted_in: nil)
       model = model_name.constantize
       deleted_in ||= SecureRandom.uuid

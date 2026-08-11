@@ -35,6 +35,9 @@ Layout/HashAlignment:
   EnforcedColonStyle: key
   EnforcedHashRocketStyle: table
 
+Layout/LeadingCommentSpace:
+  AllowRBSInlineAnnotation: true
+
 Layout/MultilineMethodCallIndentation:
   EnforcedStyle: indented
 

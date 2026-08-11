@@ -2,12 +2,13 @@
 
 module SoftDeletable
   module TableDefinitionExtensions
-    # @param deleted_at_type [Symbol]
-    # @param deleted_in_type [Symbol]
-    # @param deleted_by_type [Symbol]
-    # @param index [Hash, Boolean]
-    # @param foreign_key [Hash, Boolean]
-    # @return [void]
+    #: (
+    #|   ?deleted_at_type: Symbol,
+    #|   ?deleted_in_type: Symbol,
+    #|   ?deleted_by_type: Symbol,
+    #|   ?index: Hash[Symbol, untyped] | bool,
+    #|   ?foreign_key: Hash[Symbol, untyped] | bool
+    #| ) -> void
     def soft_deletable(
       deleted_at_type: :timestamp,
       deleted_in_type: default_deleted_in_type,
@@ -22,17 +23,17 @@ module SoftDeletable
 
   private
 
-    # @return [Symbol]
+    #: -> Symbol
     def default_deleted_in_type
       SoftDeletable.supports_uuid_columns?(@conn || self) ? :uuid : :string
     end
 
-    # @return [Symbol]
+    #: -> Symbol
     def default_deleted_by_type
       SoftDeletable.default_primary_key_type(@conn || self)
     end
 
-    # @return [Hash]
+    #: -> Hash[Symbol, untyped]
     def default_deleted_by_foreign_key_options
       { to_table: SoftDeletable.config.user_table_name }
     end

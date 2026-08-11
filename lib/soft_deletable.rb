@@ -19,33 +19,29 @@ module SoftDeletable
     base.include(SoftDeletable::Model)
   end
 
-  # @return [SoftDeletable::Config]
+  #: -> SoftDeletable::Config
   def self.config
     @config ||= Config.new.freeze
   end
 
-  # @yieldparam config [SoftDeletable::Config]
-  # @return [void]
+  #: { (SoftDeletable::Config) -> void } -> void
   def self.configure
     config = self.config.dup
     yield(config)
     @config = config.freeze
   end
 
-  # @param connection [ActiveRecord::ConnectionAdapters::AbstractAdapter]
-  # @return [Symbol]
+  #: (ActiveRecord::ConnectionAdapters::AbstractAdapter connection) -> bool
   def self.supports_bigint_columns?(connection)
     connection.native_database_types.key?(:bigint)
   end
 
-  # @param connection [ActiveRecord::ConnectionAdapters::AbstractAdapter]
-  # @return [Boolean]
+  #: (ActiveRecord::ConnectionAdapters::AbstractAdapter connection) -> bool
   def self.supports_uuid_columns?(connection)
     connection.native_database_types.key?(:uuid)
   end
 
-  # @param connection [ActiveRecord::ConnectionAdapters::AbstractAdapter]
-  # @return [Symbol]
+  #: (ActiveRecord::ConnectionAdapters::AbstractAdapter connection) -> Symbol
   def self.default_primary_key_type(connection)
     Rails.configuration.generators.options.dig(:active_record, :primary_key_type) || (
       supports_bigint_columns?(connection) ? :bigint : :integer

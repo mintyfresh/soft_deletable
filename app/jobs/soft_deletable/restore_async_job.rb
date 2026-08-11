@@ -7,8 +7,7 @@ module SoftDeletable
   class RestoreAsyncJob < ApplicationJob
     queue_as SoftDeletable.config.restore_job_queue
 
-    # @param model_name [String]
-    # @param ids [Array<Integer, String>]
+    #: (String model_name, Array[Integer | String] ids) -> void
     def perform(model_name, ids)
       model = model_name.constantize
 

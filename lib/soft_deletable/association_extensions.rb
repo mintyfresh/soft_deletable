@@ -3,11 +3,13 @@
 module SoftDeletable
   module AssociationExtensions
     class << self
+      #: (singleton(ActiveRecord::Base) model, Symbol association_name) -> void
       def install_dependency_callbacks(model, association_name)
         model.before_soft_delete(-> (o) { o.association(association_name).handle_soft_delete_dependency })
         model.after_restore(-> (o) { o.association(association_name).handle_restore_dependency })
       end
 
+      #: (singleton(ActiveRecord::Base) model) -> void
       def install_dependency_callbacks_for_declared_associations(model)
         model.reflect_on_all_associations.each do |reflection|
           next if reflection.options[:dependent].blank?
@@ -24,7 +26,7 @@ module SoftDeletable
 
       # Called when an owner of a has_many association is soft deleted.
       #
-      # @return [void]
+      #: -> void
       def handle_soft_delete_dependency
         return unless should_cascade_soft_delete?
 
@@ -40,7 +42,7 @@ module SoftDeletable
 
       # Called when an owner of a has_many association is restored.
       #
-      # @return [void]
+      #: -> void
       def handle_restore_dependency
         return unless should_cascade_restore?
 
@@ -51,21 +53,19 @@ module SoftDeletable
 
     private
 
-      # @return [Boolean]
+      #: -> bool
       def should_cascade_soft_delete?
         klass.try(:soft_deletable?) &&
           options[:dependent].in?(SUPPORTED_DEPENDENTS_FOR_SOFT_DELETE)
       end
 
-      # @param attributes [Hash]
-      # @return [void]
+      #: (**untyped attributes) -> void
       def cascade_soft_delete_for_dependent_destroy(**attributes)
         load_target.each { |record| record.destroy!(**attributes) }
         reset # purge the association cache
       end
 
-      # @param attributes [Hash]
-      # @return [void]
+      #: (**untyped attributes) -> void
       def cascade_soft_delete_for_dependent_destroy_async(**attributes)
         # mark any unpersisted records for destruction, since a job cannot process them
         target.each { |record| record.mark_for_destruction(**attributes) if record.new_record? }
@@ -80,9 +80,7 @@ module SoftDeletable
         ActiveJob.perform_all_later(jobs)
       end
 
-      # @param deleted_by [ActiveRecord::Base, nil]
-      # @param deleted_in [String]
-      # @return [void]
+      #: (deleted_by: ActiveRecord::Base?, deleted_in: String) -> void
       def cascade_soft_delete_for_dependent_delete_all(deleted_by:, deleted_in:)
         scope.unscope(:order).update_all( # rubocop:disable Rails/SkipsModelValidations
           deleted_at: owner.deleted_at || Time.current,
@@ -93,26 +91,23 @@ module SoftDeletable
         reset # purge the association cache
       end
 
-      # @param attributes [Hash]
-      # @return [void]
+      #: (**untyped attributes) -> void
       def cascade_soft_delete_for_unpersisted_records(**attributes)
         target.each { |record| record.mark_for_destruction(**attributes) }
       end
 
-      # @return [Boolean]
+      #: -> bool
       def should_cascade_restore?
         should_cascade_soft_delete? && owner.deleted_in.present?
       end
 
-      # @param scope [ActiveRecord::Relation]
-      # @return [void]
+      #: (ActiveRecord::Relation scope) -> void
       def cascade_restore_for_dependent_destroy(scope)
         scope.find_each(&:restore!)
         reset # purge the association cache
       end
 
-      # @param scope [ActiveRecord::Relation]
-      # @return [void]
+      #: (ActiveRecord::Relation scope) -> void
       def cascade_restore_for_dependent_destroy_async(scope)
         ids = scope.ids
         batch_size = owner.class.destroy_association_async_batch_size || DEFAULT_DESTROY_ASSOCIATION_ASYNC_BATCH_SIZE
@@ -124,8 +119,7 @@ module SoftDeletable
         ActiveJob.perform_all_later(jobs)
       end
 
-      # @param scope [ActiveRecord::Relation]
-      # @return [void]
+      #: (ActiveRecord::Relation scope) -> void
       def cascade_restore_for_dependent_delete_all(scope)
         scope.update_all(deleted_at: nil, updated_at: Time.current) # rubocop:disable Rails/SkipsModelValidations
         reset # purge the association cache
@@ -137,7 +131,7 @@ module SoftDeletable
 
       # Called when an owner of a has_one association is soft deleted.
       #
-      # @return [void]
+      #: -> void
       def handle_soft_delete_dependency
         return unless should_cascade_soft_delete?
 
@@ -156,7 +150,7 @@ module SoftDeletable
 
       # Called when an owner of a has_one association is restored.
       #
-      # @return [void]
+      #: -> void
       def handle_restore_dependency
         return unless should_cascade_restore?
 
@@ -170,59 +164,48 @@ module SoftDeletable
 
     private
 
-      # @return [Boolean]
+      #: -> bool
       def should_cascade_soft_delete?
         klass.try(:soft_deletable?) &&
           options[:dependent].in?(SUPPORTED_DEPENDENTS_FOR_SOFT_DELETE)
       end
 
-      # @param record [ActiveRecord::Base]
-      # @param attributes [Hash]
-      # @return [void]
+      #: (ActiveRecord::Base record, **untyped attributes) -> void
       def cascade_soft_delete_for_dependent_destroy(record, **attributes)
         record.destroy!(**attributes)
       end
 
-      # @param record [ActiveRecord::Base]
-      # @param attributes [Hash]
-      # @return [void]
+      #: (ActiveRecord::Base record, **untyped attributes) -> void
       def cascade_soft_delete_for_dependent_destroy_async(record, **attributes)
         owner.class.soft_delete_async_job.perform_later(klass.name, [record.id], **attributes)
       end
 
-      # @param record [ActiveRecord::Base]
-      # @param attributes [Hash]
-      # @return [void]
+      #: (ActiveRecord::Base record, **untyped attributes) -> void
       def cascade_soft_delete_for_dependent_delete(record, **attributes)
         record.delete(**attributes)
       end
 
-      # @param record [ActiveRecord::Base]
-      # @param attributes [Hash]
-      # @return [void]
+      #: (ActiveRecord::Base record, **untyped attributes) -> void
       def cascade_soft_delete_for_unpersisted_records(record, **attributes)
         record.mark_for_destruction(**attributes)
       end
 
-      # @return [Boolean]
+      #: -> bool
       def should_cascade_restore?
         should_cascade_soft_delete? && owner.deleted_in.present?
       end
 
-      # @param record [ActiveRecord::Base]
-      # @return [void]
+      #: (ActiveRecord::Base record) -> void
       def cascade_restore_for_dependent_destroy(record)
         record.restore!
       end
 
-      # @param record [ActiveRecord::Base]
-      # @return [void]
+      #: (ActiveRecord::Base record) -> void
       def cascade_restore_for_dependent_destroy_async(record)
         owner.class.restore_async_job.perform_later(klass.name, [record.id])
       end
 
-      # @param record [ActiveRecord::Base]
-      # @return [void]
+      #: (ActiveRecord::Base record) -> void
       def cascade_restore_for_dependent_delete(record)
         record.undelete
       end
@@ -230,9 +213,10 @@ module SoftDeletable
 
     module AssociationBuilderExtension
       module ClassMethods
-        # @param model [Class<ActiveRecord::Base>]
-        # @param reflection [ActiveRecord::Reflection::AssociationReflection]
-        # @return [void]
+        #: (
+        #|   singleton(ActiveRecord::Base) model,
+        #|   ActiveRecord::Reflection::AssociationReflection reflection
+        #| ) -> void
         def add_destroy_callbacks(model, reflection)
           result = super
 
@@ -243,8 +227,7 @@ module SoftDeletable
         end
       end
 
-      # @param base [Class<ActiveRecord::Associations::Association>]
-      # @return [void]
+      #: (singleton(ActiveRecord::Associations::Association) base) -> void
       def self.prepended(base)
         super
         class << base
