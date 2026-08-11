@@ -161,14 +161,14 @@ module SoftDeletable
 
   private
 
-    #: { () -> void } -> void
-    def run_soft_delete_callbacks(&)
-      run_callbacks(:soft_delete, &)
+    #: () { () -> void } -> void
+    def run_soft_delete_callbacks(&block)
+      run_callbacks(:soft_delete, &block)
     end
 
-    #: { () -> void } -> void
-    def run_restore_callbacks(&)
-      run_callbacks(:restore, &)
+    #: () { () -> void } -> void
+    def run_restore_callbacks(&block)
+      run_callbacks(:restore, &block)
     end
 
     #: -> void

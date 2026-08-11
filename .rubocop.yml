@@ -88,6 +88,9 @@ Metrics/ClassLength:
     - heredoc
     - method_call
 
+Naming/BlockForwarding:
+  EnforcedStyle: explicit
+
 Naming/PredicatePrefix:
   NamePrefix:
     - is_
@@ -123,6 +126,9 @@ RSpec/MultipleMemoizedHelpers:
 
 RSpecRails/NegationBeValid:
   EnforcedStyle: be_invalid
+
+Style/ArgumentsForwarding:
+  UseAnonymousForwarding: false
 
 Style/ConditionalAssignment:
   EnforcedStyle: assign_inside_condition
