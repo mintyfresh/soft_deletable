@@ -143,7 +143,10 @@ module SoftDeletable
     def delete(deleted_in: SecureRandom.uuid, deleted_by: nil)
       return true if deleted? && !deleted_changed?(to: true)
 
-      update_columns(deleted_at: Time.current, updated_at: Time.current, deleted_in:, deleted_by_id: deleted_by&.id) # rubocop:disable Rails/SkipsModelValidations
+      attributes = { deleted_at: Time.current, deleted_in:, deleted_by_id: deleted_by&.id }
+      attributes[:updated_at] = Time.current if has_attribute?(:updated_at)
+
+      update_columns(attributes) # rubocop:disable Rails/SkipsModelValidations
     end
 
     # Restores a soft-deleted record.
@@ -164,7 +167,10 @@ module SoftDeletable
     #
     #: -> bool
     def undelete
-      update_columns(deleted_at: nil, updated_at: Time.current) # rubocop:disable Rails/SkipsModelValidations
+      attributes = { deleted_at: nil }
+      attributes[:updated_at] = Time.current if has_attribute?(:updated_at)
+
+      update_columns(attributes) # rubocop:disable Rails/SkipsModelValidations
     end
 
   private

@@ -98,6 +98,52 @@ RSpec.describe User, type: :model do
     end
   end
 
+  describe '#save' do
+    subject(:save) { user.save }
+
+    before(:each) do
+      ActiveJob::Base.queue_adapter.enqueued_jobs.clear
+    end
+
+    context 'when the record is created in a deleted state' do
+      let(:user) { build(:user, :deleted, :with_created_products) }
+
+      it 'soft-deletes all the created products', :aggregate_failures do
+        expect(save).to be_truthy
+        expect(user.created_products).to all be_persisted.and be_deleted.and have_attributes(
+          deleted_in: user.deleted_in,
+          deleted_by: user.deleted_by
+        )
+      end
+
+      it "doesn't enqueue a job for the unsaved products", :aggregate_failures do
+        expect(save).to be_truthy
+        expect(SoftDeletable::SoftDeleteAsyncJob).not_to have_been_enqueued
+      end
+    end
+
+    context 'when the record is created in a deleted state with already-saved products' do
+      let(:user) { build(:user, :deleted) }
+      let(:created_products) { create_list(:product, 2) }
+
+      before(:each) do
+        user.created_products = created_products
+      end
+
+      it 'enqueues a job to soft-delete the saved products', :aggregate_failures do
+        expect(save).to be_truthy
+        expect(SoftDeletable::SoftDeleteAsyncJob).to have_been_enqueued
+          .on_queue(SoftDeletable.config.delete_job_queue)
+          .with(
+            Product.name,
+            created_products.map(&:id),
+            deleted_in: user.deleted_in,
+            deleted_by: user.deleted_by
+          )
+      end
+    end
+  end
+
   describe '#restore' do
     subject(:restore) { user.restore }
 
