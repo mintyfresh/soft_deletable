@@ -31,13 +31,15 @@ module SoftDeletable
       def handle_soft_delete_dependency
         return unless should_cascade_soft_delete?
 
-        attributes = { deleted_by: owner.deleted_by, deleted_in: owner.deleted_in }
+        with_reentrancy_protection(:soft_delete) do
+          attributes = { deleted_by: owner.deleted_by, deleted_in: owner.deleted_in }
 
-        if owner.persisted?
-          send(:"cascade_soft_delete_for_dependent_#{options[:dependent]}", **attributes)
-        else
-          # handle the case where a record is created in a deleted state
-          cascade_soft_delete_for_unpersisted_records(**attributes)
+          if owner.persisted?
+            send(:"cascade_soft_delete_for_dependent_#{options[:dependent]}", **attributes)
+          else
+            # handle the case where an owner is created in a deleted state
+            cascade_soft_delete_for_unpersisted_owner(**attributes)
+          end
         end
       end
 
@@ -47,12 +49,25 @@ module SoftDeletable
       def handle_restore_dependency
         return unless should_cascade_restore?
 
-        # records that were deleted in the same transaction as the owner
-        scope = self.scope.unscope(:order).unscope_deleted.deleted.where(deleted_in: owner.deleted_in)
-        send(:"cascade_restore_for_dependent_#{options[:dependent]}", scope)
+        with_reentrancy_protection(:restore) do
+          # records that were deleted in the same transaction as the owner
+          scope = self.scope.unscope(:order).unscope_deleted.deleted.where(deleted_in: owner.deleted_in)
+          send(:"cascade_restore_for_dependent_#{options[:dependent]}", scope)
+        end
       end
 
     private
+
+      #: (Symbol operation) { () -> void } -> void
+      def with_reentrancy_protection(operation, &block)
+        name = :"@__cascading_#{operation}"
+        return if instance_variable_get(name)
+
+        instance_variable_set(name, true)
+        yield
+      ensure
+        instance_variable_set(name, false)
+      end
 
       #: -> bool
       def should_cascade_soft_delete?
@@ -62,16 +77,16 @@ module SoftDeletable
 
       #: (**untyped attributes) -> void
       def cascade_soft_delete_for_dependent_destroy(**attributes)
-        load_target.each { |record| record.destroy!(**attributes) }
+        load_target.each { |record| record.destroy!(**attributes) unless record.deleted? }
         reset # purge the association cache
       end
 
       #: (**untyped attributes) -> void
       def cascade_soft_delete_for_dependent_destroy_async(**attributes)
         # mark any unpersisted records for destruction, since a job cannot process them
-        target.each { |record| record.mark_for_destruction(**attributes) if record.new_record? }
+        target.each { |record| record.mark_for_destruction(**attributes) if record.new_record? && !record.deleted? }
 
-        ids = scope.unscope(:order).ids
+        ids = scope.unscope(:order).not_deleted.ids
         batch_size = owner.class.destroy_association_async_batch_size || DEFAULT_DESTROY_ASSOCIATION_ASYNC_BATCH_SIZE
 
         jobs = ids.each_slice(batch_size).map do |batch|
@@ -83,7 +98,7 @@ module SoftDeletable
 
       #: (deleted_by: ActiveRecord::Base?, deleted_in: String) -> void
       def cascade_soft_delete_for_dependent_delete_all(deleted_by:, deleted_in:)
-        scope.unscope(:order).update_all( # rubocop:disable Rails/SkipsModelValidations
+        scope.unscope(:order).not_deleted.update_all( # rubocop:disable Rails/SkipsModelValidations
           deleted_at: owner.deleted_at || Time.current,
           deleted_by_id: deleted_by&.id,
           deleted_in:,
@@ -93,8 +108,11 @@ module SoftDeletable
       end
 
       #: (**untyped attributes) -> void
-      def cascade_soft_delete_for_unpersisted_records(**attributes)
-        target.each { |record| record.mark_for_destruction(**attributes) }
+      def cascade_soft_delete_for_unpersisted_owner(**attributes)
+        persisted, unpersisted = target.partition(&:persisted?)
+        unpersisted.each { |record| record.mark_for_destruction(**attributes) unless record.deleted? }
+        persisted.each { |record| record.destroy!(**attributes) unless record.deleted? }
+        self.target = unpersisted # retain only the unpersisted records for autosave
       end
 
       #: -> bool
@@ -136,16 +154,18 @@ module SoftDeletable
       def handle_soft_delete_dependency
         return unless should_cascade_soft_delete?
 
-        record = load_target
-        return unless record # Nothing to do if there's no associated record to delete
+        with_reentrancy_protection(:soft_delete) do
+          record = load_target
+          return unless record # Nothing to do if there's no associated record to delete
 
-        attributes = { deleted_by: owner.deleted_by, deleted_in: owner.deleted_in }
+          attributes = { deleted_by: owner.deleted_by, deleted_in: owner.deleted_in }
 
-        if owner.persisted?
-          send(:"cascade_soft_delete_for_dependent_#{options[:dependent]}", record, **attributes)
-        else
-          # handle the case where a record is created in a deleted state
-          cascade_soft_delete_for_unpersisted_records(record, **attributes)
+          if owner.persisted?
+            send(:"cascade_soft_delete_for_dependent_#{options[:dependent]}", record, **attributes)
+          else
+            # handle the case where an owner is created in a deleted state
+            cascade_soft_delete_for_unpersisted_owner(record, **attributes)
+          end
         end
       end
 
@@ -155,15 +175,28 @@ module SoftDeletable
       def handle_restore_dependency
         return unless should_cascade_restore?
 
-        record = scope.unscope_deleted.deleted.where(deleted_in: owner.deleted_in).first
-        return unless record # Nothing to do if there's no associated record to restore
+        with_reentrancy_protection(:restore) do
+          record = scope.unscope_deleted.deleted.where(deleted_in: owner.deleted_in).first
+          return unless record # Nothing to do if there's no associated record to restore
 
-        send(:"cascade_restore_for_dependent_#{options[:dependent]}", record)
+          send(:"cascade_restore_for_dependent_#{options[:dependent]}", record)
 
-        reset # purge the association cache
+          reset # purge the association cache
+        end
       end
 
     private
+
+      #: (Symbol operation) { () -> void } -> void
+      def with_reentrancy_protection(operation, &block)
+        name = :"@__cascading_#{operation}"
+        return if instance_variable_get(name)
+
+        instance_variable_set(name, true)
+        yield
+      ensure
+        instance_variable_set(name, false)
+      end
 
       #: -> bool
       def should_cascade_soft_delete?
@@ -173,22 +206,28 @@ module SoftDeletable
 
       #: (ActiveRecord::Base record, **untyped attributes) -> void
       def cascade_soft_delete_for_dependent_destroy(record, **attributes)
-        record.destroy!(**attributes)
+        record.destroy!(**attributes) unless record.deleted?
+        reset # purge the association cache
       end
 
       #: (ActiveRecord::Base record, **untyped attributes) -> void
       def cascade_soft_delete_for_dependent_destroy_async(record, **attributes)
-        owner.class.soft_delete_async_job.perform_later(klass.name, [record.id], **attributes)
+        owner.class.soft_delete_async_job.perform_later(klass.name, [record.id], **attributes) unless record.deleted?
       end
 
       #: (ActiveRecord::Base record, **untyped attributes) -> void
       def cascade_soft_delete_for_dependent_delete(record, **attributes)
-        record.delete(**attributes)
+        record.delete(**attributes) unless record.deleted?
+        reset # purge the association cache
       end
 
       #: (ActiveRecord::Base record, **untyped attributes) -> void
-      def cascade_soft_delete_for_unpersisted_records(record, **attributes)
-        record.mark_for_destruction(**attributes)
+      def cascade_soft_delete_for_unpersisted_owner(record, **attributes)
+        if record.persisted?
+          send(:"cascade_soft_delete_for_dependent_#{options[:dependent]}", record, **attributes)
+        else
+          record.mark_for_destruction(**attributes) unless record.deleted?
+        end
       end
 
       #: -> bool
@@ -198,17 +237,17 @@ module SoftDeletable
 
       #: (ActiveRecord::Base record) -> void
       def cascade_restore_for_dependent_destroy(record)
-        record.restore!
+        record.restore! if record.deleted?
       end
 
       #: (ActiveRecord::Base record) -> void
       def cascade_restore_for_dependent_destroy_async(record)
-        owner.class.restore_async_job.perform_later(klass.name, [record.id])
+        owner.class.restore_async_job.perform_later(klass.name, [record.id]) if record.deleted?
       end
 
       #: (ActiveRecord::Base record) -> void
       def cascade_restore_for_dependent_delete(record)
-        record.undelete
+        record.undelete if record.deleted?
       end
     end
 

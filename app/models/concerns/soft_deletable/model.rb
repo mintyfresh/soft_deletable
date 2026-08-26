@@ -112,7 +112,9 @@ module SoftDeletable
     #
     #: (?deleted_in: String, ?deleted_by: ActiveRecord::Base?) -> void
     def mark_for_destruction(deleted_in: SecureRandom.uuid, deleted_by: nil)
-      self.deleted = true
+      return if deleted?
+
+      self.deleted_at = Time.current
       self.deleted_in = deleted_in
       self.deleted_by = deleted_by
     end
@@ -121,6 +123,8 @@ module SoftDeletable
     #
     #: (?deleted_in: String, ?deleted_by: ActiveRecord::Base?) -> bool
     def destroy(deleted_in: SecureRandom.uuid, deleted_by: nil)
+      return true if deleted? && !deleted_changed?(to: true)
+
       update(deleted: true, deleted_in:, deleted_by:)
     end
 
@@ -128,6 +132,8 @@ module SoftDeletable
     #
     #: (?deleted_in: String, ?deleted_by: ActiveRecord::Base?) -> bool
     def destroy!(deleted_in: SecureRandom.uuid, deleted_by: nil)
+      return true if deleted? && !deleted_changed?(to: true)
+
       update!(deleted: true, deleted_in:, deleted_by:)
     end
 
@@ -135,6 +141,8 @@ module SoftDeletable
     #
     #: (?deleted_in: String, ?deleted_by: ActiveRecord::Base?) -> bool
     def delete(deleted_in: SecureRandom.uuid, deleted_by: nil)
+      return true if deleted? && !deleted_changed?(to: true)
+
       update_columns(deleted_at: Time.current, updated_at: Time.current, deleted_in:, deleted_by_id: deleted_by&.id) # rubocop:disable Rails/SkipsModelValidations
     end
 
