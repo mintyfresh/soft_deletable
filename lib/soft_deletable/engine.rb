@@ -22,6 +22,14 @@ module SoftDeletable
         ActiveRecord::Associations::HasManyAssociation.prepend(extensions::HasManyExtension)
         ActiveRecord::Associations::HasOneAssociation.prepend(extensions::HasOneExtension)
         ActiveRecord::Associations::Builder::Association.prepend(extensions::AssociationBuilderExtension)
+        ActiveRecord::Associations::Builder::Association.extensions << extensions::IncludesDeletedOption
+        ActiveRecord::Associations::Association.prepend(extensions::AssociationExtension)
+        ActiveRecord::Associations::Preloader::Association.prepend(extensions::PreloaderExtension)
+        ActiveRecord::Associations::Preloader::ThroughAssociation.prepend(extensions::ThroughPreloaderExtension)
+        ActiveRecord::Associations::JoinDependency::JoinAssociation.prepend(extensions::JoinAssociationExtension)
+        ActiveRecord::Reflection::AssociationReflection.prepend(extensions::ReflectionExtension)
+        ActiveRecord::Reflection::ThroughReflection.prepend(extensions::ReflectionExtension)
+        ActiveRecord::Associations::AssociationScope.prepend(extensions::AssociationScopeExtension)
       end
     end
 

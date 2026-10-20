@@ -179,7 +179,73 @@ In addition, the following transaction-level commit callbacks are available:
 * `after_soft_delete_commit` - Triggered after a transction is committed in which the soft-deletable model was deleted
 * `after_soft_delete_commit` - Triggered after a transction is committed in which the soft-deletable model was restored
 
-### Dependent Associations
+### Associations
+
+When the associated model is a soft-deletable model, the associated records are filtered by the deleted state of the record they are loaded from:
+* When the record is not deleted - Only associated records which are not deleted are included
+* When the record is deleted - Only associated records which were deleted in the same operation (ie. with the same `deleted_in`) are included
+
+This applies when loading an association from a record (e.g. `product.variants`), as well as to `joins`, `includes`, `preload`, and `eager_load`.
+
+So, given the scenario:
+```ruby
+class Product < ApplicationRecord
+  include SoftDeletable::Model
+
+  has_many :variants, class_name: 'ProductVariant', dependent: :destroy
+end
+
+class ProductVariant < ApplicationRecord
+  include SoftDeletable::Model
+
+  belongs_to :product
+end
+
+product = Product.last
+
+product.variants.count # => 5
+product.variants.first.destroy!
+product.variants.count # => 4
+product.destroy!
+product.deleted? # => true
+product.variants.count # => 4
+
+ProductVariant.deleted.count # => 5
+ProductVariant.deleted.group(:deleted_in).count.count # => 2 (operations)
+```
+
+#### Includes Deleted
+
+The `includes_deleted:` option controls how an association is filtered by deleted state:
+* `:never` - Only associated records which are not deleted are included, regardless of the deleted state of the record they are loaded from
+* `:together` - Associated records are filtered by the deleted state of the record they are loaded from, as described above
+* `:always` - Associated records are included regardless of their deleted state (ie. no filtering is applied)
+
+It defaults to `:together` for `has_one`, `has_many`, and `has_and_belongs_to_many` associations, and `:always` for `belongs_to` associations:
+```ruby
+class Product < ApplicationRecord
+  include SoftDeletable::Model
+
+  has_many :variants, class_name: 'ProductVariant', dependent: :destroy
+  has_many :live_variants, class_name: 'ProductVariant', includes_deleted: :never
+  has_many :all_variants, class_name: 'ProductVariant', includes_deleted: :always
+end
+
+class ProductVariant < ApplicationRecord
+  include SoftDeletable::Model
+
+  belongs_to :product, includes_deleted: :together
+end
+```
+
+When `includes_deleted: :together` is specified for a `belongs_to` association, deleted records will also include associated records which are not deleted
+(ie. a variant which was deleted on its own will still include its product).
+
+**NOTE:** Associations will _only_ be filtered for other SoftDeletable models. All three options may still be specified for associations with non-soft-deletable models (e.g. in a concern that is shared between both), in which case:
+* When the associated model is not soft-deletable - All three options have no effect
+* When the record an association is loaded from is not soft-deletable - It is treated as not deleted, so `:never` and `:together` only include associated records which are not deleted, and `:always` has no effect
+
+#### Dependent Associations
 
 When using `has_one` and `has_many` associations, the following `dependent:` behaviours are supported for soft-deletable models:
 * `:destroy` - Cascades soft-deletion to the associated records, triggering validations and callbacks for each of the dependent records.

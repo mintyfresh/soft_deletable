@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_07_31_000000) do
+ActiveRecord::Schema[8.1].define(version: 2026_10_20_000000) do
   create_table "product_inventories", force: :cascade do |t|
     t.datetime "created_at", null: false
     t.datetime "deleted_at"
@@ -49,6 +49,23 @@ ActiveRecord::Schema[8.1].define(version: 2026_07_31_000000) do
     t.index ["deleted_by_id"], name: "index_products_on_deleted_by_id"
   end
 
+  create_table "products_tags", id: false, force: :cascade do |t|
+    t.integer "product_id", null: false
+    t.integer "tag_id", null: false
+    t.index ["product_id", "tag_id"], name: "index_products_tags_on_product_id_and_tag_id", unique: true
+    t.index ["tag_id"], name: "index_products_tags_on_tag_id"
+  end
+
+  create_table "tags", force: :cascade do |t|
+    t.datetime "created_at", null: false
+    t.datetime "deleted_at"
+    t.integer "deleted_by_id"
+    t.string "deleted_in"
+    t.string "name", null: false
+    t.datetime "updated_at", null: false
+    t.index ["deleted_by_id"], name: "index_tags_on_deleted_by_id"
+  end
+
   create_table "users", force: :cascade do |t|
     t.datetime "created_at", null: false
     t.datetime "deleted_at"
@@ -66,5 +83,6 @@ ActiveRecord::Schema[8.1].define(version: 2026_07_31_000000) do
   add_foreign_key "product_variants", "users", column: "deleted_by_id"
   add_foreign_key "products", "users", column: "created_by_id"
   add_foreign_key "products", "users", column: "deleted_by_id"
+  add_foreign_key "tags", "users", column: "deleted_by_id"
   add_foreign_key "users", "users", column: "deleted_by_id"
 end

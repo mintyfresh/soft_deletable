@@ -31,6 +31,10 @@ class Product < ApplicationRecord
   belongs_to :created_by, class_name: 'User', inverse_of: :created_products
 
   has_many :variants, class_name: 'ProductVariant', dependent: :destroy, inverse_of: :product
+  has_many :all_variants, class_name: 'ProductVariant', includes_deleted: :always, inverse_of: false, dependent: nil
+  has_many :live_variants, class_name: 'ProductVariant', includes_deleted: :never, inverse_of: false, dependent: nil
+
+  has_and_belongs_to_many :tags
 
   validates :name, presence: true
   validates :price_cents, presence: true, numericality: { greater_than: 0 }

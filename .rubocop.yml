@@ -127,6 +127,9 @@ RSpec/MultipleMemoizedHelpers:
 RSpecRails/NegationBeValid:
   EnforcedStyle: be_invalid
 
+Rails/HasAndBelongsToMany:
+  Enabled: false
+
 Style/ArgumentsForwarding:
   UseAnonymousForwarding: false
 

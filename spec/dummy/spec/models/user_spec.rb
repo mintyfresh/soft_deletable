@@ -183,7 +183,7 @@ RSpec.describe User, type: :model do
           .on_queue(SoftDeletable.config.restore_job_queue)
           .with(
             Product.name,
-            user.created_products.excluding(other_product).pluck(:id)
+            Product.where(created_by: user).excluding(other_product).pluck(:id)
           )
       end
     end
@@ -204,6 +204,68 @@ RSpec.describe User, type: :model do
             Product.name,
             user.created_products.pluck(:id)
           )
+      end
+    end
+  end
+
+  describe 'through association filtering' do
+    let(:user) { create(:user, :with_created_products, created_products_traits: [:with_variants]) }
+    let(:product) { user.created_products.first }
+    let!(:previously_deleted_variant) { create(:product_variant, :deleted, product:) }
+    let!(:variant_of_deleted_product) do
+      deleted_product = create(:product, :deleted, created_by: user)
+      create(:product_variant, product: deleted_product)
+    end
+    let(:live_variants) { ProductVariant.where(product: user.created_products).not_deleted }
+
+    shared_examples 'filters every step' do
+      it 'only includes variants that are not deleted, of products that are not deleted', :aggregate_failures do
+        expect(variants).to match_array(live_variants)
+        expect(variants).not_to include(previously_deleted_variant, variant_of_deleted_product)
+      end
+    end
+
+    context 'when loaded from the user' do
+      let(:variants) { user.reload.created_product_variants }
+
+      it_behaves_like 'filters every step'
+    end
+
+    %i[preload eager_load].each do |method|
+      context "when loaded with #{method}" do
+        let(:variants) do
+          described_class.public_send(method, :created_product_variants).find(user.id).created_product_variants
+        end
+
+        it_behaves_like 'filters every step'
+      end
+    end
+
+    context 'when joined' do
+      let(:variants) do
+        joined = described_class.joins(:created_product_variants).where(id: user).select('product_variants.id')
+        ProductVariant.where(id: joined)
+      end
+
+      it_behaves_like 'filters every step'
+    end
+
+    context 'when the user is deleted' do
+      let(:user) { create(:user, :deleted, :with_created_products, created_products_traits: [:with_variants]) }
+
+      it 'only includes variants deleted in the same operation', :aggregate_failures do
+        expect(user.reload.created_product_variants).to be_present.and all have_attributes(
+          deleted: true, deleted_in: user.deleted_in
+        )
+        expect(user.created_product_variants).not_to include(previously_deleted_variant, variant_of_deleted_product)
+      end
+    end
+
+    context 'with includes_deleted' do
+      it 'is not allowed' do
+        expect do
+          described_class.has_many :all_variants, through: :created_products, source: :variants, includes_deleted: true
+        end.to raise_error(ArgumentError, /cannot use includes_deleted on a through association/)
       end
     end
   end

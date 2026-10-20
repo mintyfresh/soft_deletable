@@ -6,6 +6,7 @@ require 'soft_deletable/version'
 require 'soft_deletable/engine'
 
 module SoftDeletable
+  autoload :AssociationCondition, 'soft_deletable/association_condition'
   autoload :AssociationExtensions, 'soft_deletable/association_extensions'
   autoload :MigrationExtensions, 'soft_deletable/migration_extensions'
   autoload :TableDefinitionExtensions, 'soft_deletable/table_definition_extensions'

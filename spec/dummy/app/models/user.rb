@@ -26,6 +26,7 @@ class User < ApplicationRecord
 
   has_many :created_products, class_name: 'Product', dependent: :destroy_async,
                               inverse_of: :created_by, foreign_key: :created_by_id
+  has_many :created_product_variants, through: :created_products, source: :variants
 
   validates :email, presence: true, uniqueness: true
 end
