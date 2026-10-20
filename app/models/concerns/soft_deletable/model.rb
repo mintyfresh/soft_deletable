@@ -80,6 +80,13 @@ module SoftDeletable
       deleted_at_before_last_save.present?
     end
 
+    #: -> bool
+    def deleted_in_database # rubocop:disable Naming/PredicateMethod
+      deleted_at_in_database.present?
+    end
+
+    alias deleted_in_database? deleted_in_database
+
     # Checks if the deleted attribute has an unsaved change.
     #
     # @param to an optional value to check against
