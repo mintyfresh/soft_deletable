@@ -13,9 +13,10 @@ jobs:
     strategy:
       matrix:
         ruby:
-          - '3.2.9'
-          - '3.3.9'
-          - '3.4.6'
+          - '3.2.11'
+          - '3.3.13'
+          - '3.4.12'
+          - '4.0.9'
 
     steps:
     - uses: actions/checkout@v4
@@ -36,9 +37,10 @@ jobs:
     strategy:
       matrix:
         ruby:
-          - '3.2.9'
-          - '3.3.9'
-          - '3.4.6'
+          - '3.2.11'
+          - '3.3.13'
+          - '3.4.12'
+          - '4.0.9'
 
     steps:
       - uses: actions/checkout@v4
@@ -77,9 +79,10 @@ jobs:
     strategy:
       matrix:
         ruby:
-          - '3.2.9'
-          - '3.3.9'
-          - '3.4.6'
+          - '3.2.11'
+          - '3.3.13'
+          - '3.4.12'
+          - '4.0.9'
 
     steps:
       - uses: actions/checkout@v4
@@ -97,3 +100,49 @@ jobs:
           DATABASE_ADAPTER: postgresql
           DATABASE: soft_deletable_test
           DATABASE_URL: postgres://soft_deletable:soft_deletable@localhost:5432/soft_deletable_test
+
+  rspec_mysql:
+    name: RSpec (MySQL)
+    runs-on: ubuntu-latest
+
+    services:
+      mysql:
+        image: mysql:8.4
+        env:
+          MYSQL_ROOT_PASSWORD: soft_deletable
+          MYSQL_USER: soft_deletable
+          MYSQL_PASSWORD: soft_deletable
+          MYSQL_DATABASE: soft_deletable_test
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd "mysqladmin ping -h 127.0.0.1"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    strategy:
+      matrix:
+        ruby:
+          - '3.2.11'
+          - '3.3.13'
+          - '3.4.12'
+          - '4.0.9'
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Set up Ruby
+        uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: ${{ matrix.ruby }}
+          bundler-cache: true
+      - name: RSpec
+        run: bin/rspec
+        env:
+          RAILS_ENV: test
+          DATABASE_ADAPTER: trilogy
+          DATABASE_ENCODING: utf8mb4
+          DATABASE: soft_deletable_test
+          DATABASE_URL: trilogy://soft_deletable:soft_deletable@127.0.0.1:3306/soft_deletable_test

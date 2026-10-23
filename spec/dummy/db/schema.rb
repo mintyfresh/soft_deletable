@@ -14,9 +14,9 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_20_000000) do
   create_table "product_inventories", force: :cascade do |t|
     t.datetime "created_at", null: false
     t.datetime "deleted_at"
-    t.integer "deleted_by_id"
+    t.bigint "deleted_by_id"
     t.string "deleted_in"
-    t.integer "product_id", null: false
+    t.bigint "product_id", null: false
     t.integer "quantity", null: false
     t.datetime "updated_at", null: false
     t.index ["deleted_by_id"], name: "index_product_inventories_on_deleted_by_id"
@@ -26,11 +26,11 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_20_000000) do
   create_table "product_variants", force: :cascade do |t|
     t.datetime "created_at", null: false
     t.datetime "deleted_at"
-    t.integer "deleted_by_id"
+    t.bigint "deleted_by_id"
     t.string "deleted_in"
     t.string "name", null: false
     t.integer "price_cents", null: false
-    t.integer "product_id", null: false
+    t.bigint "product_id", null: false
     t.datetime "updated_at", null: false
     t.index ["deleted_by_id"], name: "index_product_variants_on_deleted_by_id"
     t.index ["product_id"], name: "index_product_variants_on_product_id"
@@ -38,9 +38,9 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_20_000000) do
 
   create_table "products", force: :cascade do |t|
     t.datetime "created_at", null: false
-    t.integer "created_by_id", null: false
+    t.bigint "created_by_id", null: false
     t.datetime "deleted_at"
-    t.integer "deleted_by_id"
+    t.bigint "deleted_by_id"
     t.string "deleted_in"
     t.string "name", null: false
     t.integer "price_cents", null: false
@@ -50,8 +50,8 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_20_000000) do
   end
 
   create_table "products_tags", id: false, force: :cascade do |t|
-    t.integer "product_id", null: false
-    t.integer "tag_id", null: false
+    t.bigint "product_id", null: false
+    t.bigint "tag_id", null: false
     t.index ["product_id", "tag_id"], name: "index_products_tags_on_product_id_and_tag_id", unique: true
     t.index ["tag_id"], name: "index_products_tags_on_tag_id"
   end
@@ -59,7 +59,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_20_000000) do
   create_table "tags", force: :cascade do |t|
     t.datetime "created_at", null: false
     t.datetime "deleted_at"
-    t.integer "deleted_by_id"
+    t.bigint "deleted_by_id"
     t.string "deleted_in"
     t.string "name", null: false
     t.datetime "updated_at", null: false
@@ -69,7 +69,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_20_000000) do
   create_table "users", force: :cascade do |t|
     t.datetime "created_at", null: false
     t.datetime "deleted_at"
-    t.integer "deleted_by_id"
+    t.bigint "deleted_by_id"
     t.string "deleted_in"
     t.string "email", null: false
     t.datetime "updated_at", null: false

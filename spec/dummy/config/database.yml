@@ -1,6 +1,6 @@
 default: &default
   adapter: <%= ENV.fetch('DATABASE_ADAPTER', 'sqlite3') %>
-  encoding: unicode
+  encoding: <%= ENV.fetch('DATABASE_ENCODING', 'unicode') %>
   pool: <%= ENV.fetch('RAILS_MAX_THREADS', 5) %>
   timeout: 5000
 
