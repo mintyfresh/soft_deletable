@@ -34,7 +34,7 @@ module SoftDeletable
         raise PermanentCascadeError,
               "Cannot cascade the deletion of #{owner.class.name} to #{reflection.name}, " \
               "since #{owner.class.name} is not soft-deletable but #{klass.name} is. " \
-              'Use `dependent: nil` and delete the associated records explicitly instead.'
+              'Use `dependent: false` and delete the associated records explicitly instead.'
       end
 
       #: -> ActiveRecord::Relation?
