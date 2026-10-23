@@ -115,10 +115,13 @@ module SoftDeletable
         (from == UNSPECIFIED || from == old_value)
     end
 
-    # Marks a record for destruction.
+    # Marks a record for soft-deletion when it's next saved,
+    # or marks it for hard-deletion by an autosaving association if `permanent` is set.
     #
-    #: (?deleted_in: String, ?deleted_by: ActiveRecord::Base?) -> void
-    def mark_for_destruction(deleted_in: SecureRandom.uuid, deleted_by: nil)
+    #: (?deleted_in: String, ?deleted_by: ActiveRecord::Base?, ?permanent: bool) -> void
+    def mark_for_destruction(deleted_in: SecureRandom.uuid, deleted_by: nil, permanent: false)
+      # marked_for_destruction? is only set for hard-deletion, which autosave performs by calling destroy
+      return super() if permanent
       return if deleted?
 
       self.deleted_at = Time.current
@@ -126,28 +129,34 @@ module SoftDeletable
       self.deleted_by = deleted_by
     end
 
-    # Soft-deletes a record.
+    # Soft-deletes a record, or hard-deletes it if `permanent` is set.
+    # Defaults to hard-deletion for records marked for destruction with `permanent` set.
     #
-    #: (?deleted_in: String, ?deleted_by: ActiveRecord::Base?) -> bool
-    def destroy(deleted_in: SecureRandom.uuid, deleted_by: nil)
+    #: (?deleted_in: String, ?deleted_by: ActiveRecord::Base?, ?permanent: bool) -> bool
+    def destroy(deleted_in: SecureRandom.uuid, deleted_by: nil, permanent: marked_for_destruction?)
+      return super() if permanent
       return true if deleted? && !deleted_changed?(to: true)
 
       update(deleted: true, deleted_in:, deleted_by:)
     end
 
-    # Soft-deletes a record.
+    # Soft-deletes a record, or hard-deletes it if `permanent` is set.
+    # Defaults to hard-deletion for records marked for destruction with `permanent` set.
     #
-    #: (?deleted_in: String, ?deleted_by: ActiveRecord::Base?) -> bool
-    def destroy!(deleted_in: SecureRandom.uuid, deleted_by: nil)
+    #: (?deleted_in: String, ?deleted_by: ActiveRecord::Base?, ?permanent: bool) -> bool
+    def destroy!(deleted_in: SecureRandom.uuid, deleted_by: nil, permanent: marked_for_destruction?)
+      # ActiveRecord's destroy! calls destroy, which would soft-delete the record
+      return destroy(permanent: true) || _raise_record_not_destroyed if permanent
       return true if deleted? && !deleted_changed?(to: true)
 
       update!(deleted: true, deleted_in:, deleted_by:)
     end
 
-    # Soft-deletes a record without running validations or callbacks.
+    # Soft-deletes a record without running validations or callbacks, or hard-deletes it if `permanent` is set.
     #
-    #: (?deleted_in: String, ?deleted_by: ActiveRecord::Base?) -> bool
-    def delete(deleted_in: SecureRandom.uuid, deleted_by: nil)
+    #: (?deleted_in: String, ?deleted_by: ActiveRecord::Base?, ?permanent: bool) -> bool
+    def delete(deleted_in: SecureRandom.uuid, deleted_by: nil, permanent: false)
+      return super() if permanent
       return true if deleted? && !deleted_changed?(to: true)
 
       attributes = { deleted_at: Time.current, deleted_in:, deleted_by_id: deleted_by&.id }

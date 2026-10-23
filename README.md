@@ -160,6 +160,48 @@ In addition, `restore`, `restore!`, and `undelete` are available as correspondin
 to restore a previously soft-deleted record. With the exception of `undelete` (which corresponds to `delete` and thus does not fire callbacks),
 these will also cascade un-deletion to their associations. See more in the section about dependent associations.
 
+`delete_all` is also overridden for relations of soft-deletable models (e.g. `Product.delete_all` or `Product.where(...).delete_all`),
+soft-deleting the records which are not already deleted in a single operation, without triggering validations or callbacks:
+```ruby
+Product.where(created_by: user).delete_all(deleted_by: current_user, deleted_in: request.request_id)
+```
+
+#### Permanent Deletion
+
+Each of `destroy`, `destroy!`, `delete`, `delete_all`, and `destroy_all` accept a `permanent: true` argument to hard-delete records instead:
+```ruby
+product.destroy!(permanent: true)
+product.variants.delete_all(permanent: true) # only the variants loaded by the association
+Product.deleted.where(deleted_at: ...1.year.ago).delete_all(permanent: true)
+```
+
+`destroy_all` (on relations and collection associations) and collection `delete_all` also accept `deleted_by:` and `deleted_in:`.
+`destroy_all` soft-deletes its records in a single operation (ie. with a shared `deleted_in`), so they are restored together.
+Passing any of these options to a `has_many :through` association, or to `delete_all` with `:nullify`, raises an `ArgumentError`,
+since those don't delete the associated records.
+
+`mark_for_destruction(permanent: true)` marks a record to be hard-deleted when its owner is saved.
+As with ActiveRecord, this requires the association to autosave (e.g. `autosave: true`, or `accepts_nested_attributes_for`).
+Without `permanent`, the record is instead soft-deleted when it is next saved.
+
+Hard-deletion cascades to dependent associations according to their `dependent:` option, as with ActiveRecord.
+Unlike soft-deletion, this includes associated records which were already soft-deleted, since they would otherwise be orphaned.
+
+Hard-deleting a record which is _not_ soft-deletable will not cascade to dependent soft-deletable records,
+and raises `SoftDeletable::PermanentCascadeError` instead, to prevent unintentional loss of soft-deletable records.
+If this is desirable, use `dependent: false` and delete the associated records explicitly:
+```ruby
+class Order < ApplicationRecord
+  # not soft-deletable
+
+  has_many :line_items, dependent: false # LineItem is soft-deletable
+
+  before_destroy do
+    line_items.unscope_deleted.find_each { |line_item| line_item.destroy!(permanent: true) }
+  end
+end
+```
+
 ### Helpers
 
 The following helpers are available to soft-deletable models:

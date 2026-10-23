@@ -9,6 +9,8 @@ module SoftDeletable
   autoload :AssociationCondition, 'soft_deletable/association_condition'
   autoload :AssociationExtensions, 'soft_deletable/association_extensions'
   autoload :MigrationExtensions, 'soft_deletable/migration_extensions'
+  autoload :PermanentCascadeError, 'soft_deletable/permanent_cascade_error'
+  autoload :RelationExtension, 'soft_deletable/relation_extension'
   autoload :TableDefinitionExtensions, 'soft_deletable/table_definition_extensions'
   autoload :TableExtensions, 'soft_deletable/table_extensions'
 

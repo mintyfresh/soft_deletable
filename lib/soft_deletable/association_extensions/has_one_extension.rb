@@ -49,7 +49,40 @@ module SoftDeletable
         end
       end
 
+      # Called before an owner of a has_one association is hard-deleted.
+      # Hard-deletes associated records regardless of their deleted state, since they'd otherwise be orphaned.
+      #
+      #: -> void
+      def handle_dependency
+        return super unless should_cascade_soft_delete?
+
+        ensure_permanent_cascade_allowed!
+        send(:"cascade_permanent_delete_for_dependent_#{options[:dependent]}")
+      end
+
     private
+
+      #: -> void
+      def cascade_permanent_delete_for_dependent_destroy
+        scope_including_deleted.find_each do |record|
+          record.destroyed_by_association = reflection
+          record.destroy!(permanent: true)
+        end
+
+        reset # purge the association cache
+      end
+
+      #: -> void
+      def cascade_permanent_delete_for_dependent_destroy_async
+        ids = scope_including_deleted.ids
+        owner.class.soft_delete_async_job.perform_later(klass.name, ids, permanent: true) if ids.any?
+      end
+
+      #: -> void
+      def cascade_permanent_delete_for_dependent_delete
+        scope_including_deleted.delete_all(permanent: true)
+        reset # purge the association cache
+      end
 
       #: (Symbol operation) { () -> void } -> void
       def with_reentrancy_protection(operation, &block)

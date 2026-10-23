@@ -160,6 +160,324 @@ RSpec.describe Product, type: :model do
         )
       end
     end
+
+    context 'when permanent' do
+      subject(:destroy) { product.destroy(permanent: true) }
+
+      it 'hard-deletes the product', :aggregate_failures do
+        expect(destroy).to be_truthy
+        expect(product).to be_destroyed
+        expect(described_class.exists?(product.id)).to be(false)
+      end
+
+      context 'when the product is already soft-deleted' do
+        let(:product) { create(:product, :deleted) }
+
+        it 'hard-deletes the product' do
+          expect { destroy }.to change { described_class.exists?(product.id) }.from(true).to(false)
+        end
+      end
+
+      context 'with associated variants' do
+        let(:product) { create(:product, :with_variants) }
+        let!(:previously_deleted_variant) { create(:product_variant, :deleted, product:) }
+
+        it 'hard-deletes all the variants, including previously soft-deleted ones', :aggregate_failures do
+          expect(destroy).to be_truthy
+          expect(ProductVariant.where(product_id: product.id)).to be_empty
+          expect(ProductVariant.exists?(previously_deleted_variant.id)).to be(false)
+        end
+      end
+
+      context 'with a previously soft-deleted inventory' do
+        let(:product) { create(:product) }
+        let!(:inventory) { create(:product_inventory, :deleted, product:) }
+
+        it 'hard-deletes the inventory', :aggregate_failures do
+          expect(destroy).to be_truthy
+          expect(ProductInventory.exists?(inventory.id)).to be(false)
+        end
+      end
+    end
+  end
+
+  describe '#destroy!' do
+    context 'when permanent' do
+      subject(:destroy!) { product.destroy!(permanent: true) }
+
+      let(:product) { create(:product, :with_variants, :with_inventory) }
+
+      it 'hard-deletes the product and its dependents', :aggregate_failures do
+        expect(destroy!).to be_truthy
+        expect(described_class.exists?(product.id)).to be(false)
+        expect(ProductVariant.where(product_id: product.id)).to be_empty
+        expect(ProductInventory.where(product_id: product.id)).to be_empty
+      end
+    end
+  end
+
+  describe '#delete' do
+    context 'when permanent' do
+      subject(:delete) { product.delete(permanent: true) }
+
+      let(:product) { create(:product) }
+
+      it 'hard-deletes the product', :aggregate_failures do
+        expect(delete).to be_truthy
+        expect(product).to be_destroyed
+        expect(described_class.exists?(product.id)).to be(false)
+      end
+    end
+  end
+
+  describe 'permanent deletion with other dependent options' do
+    let(:product) { create(:product, :with_variants, :with_inventory) }
+    let!(:previously_deleted_variant) { create(:product_variant, :deleted, product:) }
+
+    before(:each) do
+      stub_const('DeletingProduct', Class.new(ApplicationRecord) do
+        self.table_name = 'products'
+        include SoftDeletable::Model
+
+        has_many :variants, class_name: 'ProductVariant', foreign_key: :product_id,
+                            inverse_of: false, dependent: :delete_all
+        has_one :inventory, class_name: 'ProductInventory', foreign_key: :product_id,
+                            inverse_of: false, dependent: :delete
+      end)
+    end
+
+    it 'hard-deletes has_many :delete_all and has_one :delete dependents', :aggregate_failures do
+      expect(DeletingProduct.find(product.id).destroy(permanent: true)).to be_truthy
+      expect(ProductVariant.where(product_id: product.id)).to be_empty
+      expect(ProductVariant.exists?(previously_deleted_variant.id)).to be(false)
+      expect(ProductInventory.where(product_id: product.id)).to be_empty
+    end
+  end
+
+  describe 'permanent deletion of an owner that is not soft-deletable' do
+    let(:product) { create(:product, :with_variants, :with_inventory) }
+
+    before(:each) do
+      stub_const('PlainProductWithVariants', Class.new(ApplicationRecord) do
+        self.table_name = 'products'
+
+        has_many :variants, class_name: 'ProductVariant', foreign_key: :product_id,
+                            inverse_of: false, dependent: :destroy
+      end)
+
+      stub_const('PlainProductWithInventory', Class.new(ApplicationRecord) do
+        self.table_name = 'products'
+
+        has_one :inventory, class_name: 'ProductInventory', foreign_key: :product_id,
+                            inverse_of: false, dependent: :destroy
+      end)
+    end
+
+    %w[PlainProductWithVariants PlainProductWithInventory].each do |class_name|
+      it "refuses to cascade to soft-deletable dependents of #{class_name}", :aggregate_failures do
+        owner = class_name.constantize.find(product.id)
+
+        expect { owner.destroy }.to raise_error(SoftDeletable::PermanentCascadeError)
+        expect(described_class.exists?(product.id)).to be(true)
+        expect(product.variants.reload).to all have_attributes(deleted?: false)
+        expect(product.inventory.reload).to have_attributes(deleted?: false)
+      end
+    end
+  end
+
+  describe '#mark_for_destruction' do
+    let(:product) { create(:product, :with_variants, :with_inventory) }
+    let(:autosaving_product) { AutosavingProduct.find(product.id) }
+
+    before(:each) do
+      stub_const('AutosavingProduct', Class.new(ApplicationRecord) do
+        self.table_name = 'products'
+        include SoftDeletable::Model
+
+        has_many :variants, class_name: 'ProductVariant', foreign_key: :product_id,
+                            inverse_of: false, dependent: :destroy, autosave: true
+        has_one :inventory, class_name: 'ProductInventory', foreign_key: :product_id,
+                            inverse_of: false, dependent: :destroy, autosave: true
+      end)
+    end
+
+    it 'soft-deletes a marked variant when the owner is saved', :aggregate_failures do
+      variant = autosaving_product.variants.load.first
+      variant.mark_for_destruction
+      autosaving_product.save!
+
+      expect(variant).not_to be_marked_for_destruction
+      expect(variant.reload).to be_deleted
+    end
+
+    context 'when permanent' do
+      it 'marks the record for destruction' do
+        variant = product.variants.first
+        expect { variant.mark_for_destruction(permanent: true) }
+          .to change { variant.marked_for_destruction? }.from(false).to(true)
+      end
+
+      it 'marks an already soft-deleted record for destruction' do
+        variant = create(:product_variant, :deleted, product:)
+        expect { variant.mark_for_destruction(permanent: true) }
+          .to change { variant.marked_for_destruction? }.from(false).to(true)
+      end
+
+      it 'hard-deletes a marked variant when the owner is saved', :aggregate_failures do
+        variant = autosaving_product.variants.load.first
+        variant.mark_for_destruction(permanent: true)
+        autosaving_product.save!
+
+        expect(ProductVariant.exists?(variant.id)).to be(false)
+        expect(autosaving_product.variants.reload.size).to eq(2)
+      end
+
+      it 'hard-deletes a marked inventory when the owner is saved' do
+        inventory = autosaving_product.inventory
+        inventory.mark_for_destruction(permanent: true)
+        autosaving_product.save!
+
+        expect(ProductInventory.exists?(inventory.id)).to be(false)
+      end
+    end
+  end
+
+  describe '.delete_all' do
+    let!(:products) { create_list(:product, 3) }
+    let!(:previously_deleted_product) { create(:product, :deleted) }
+
+    it 'soft-deletes the live records in a single operation', :aggregate_failures do
+      expect(described_class.delete_all).to eq(3)
+      expect(products.map(&:reload)).to all be_deleted
+      expect(products.map(&:deleted_in).uniq).to contain_exactly(be_present)
+    end
+
+    it 'leaves previously soft-deleted records untouched' do
+      expect { described_class.delete_all }.not_to(change { previously_deleted_product.reload.attributes })
+    end
+
+    it 'only soft-deletes records within the scope', :aggregate_failures do
+      described_class.where(id: products.first).delete_all
+      expect(products.first.reload).to be_deleted
+      expect(products.drop(1).map(&:reload)).to all have_attributes(deleted?: false)
+    end
+
+    it 'sets the deleted-by user and deleted-in value' do
+      deleted_by = create(:user)
+      deleted_in = SecureRandom.uuid
+      described_class.where(id: products.first).delete_all(deleted_by:, deleted_in:)
+      expect(products.first.reload).to have_attributes(deleted_by:, deleted_in:)
+    end
+
+    context 'when permanent' do
+      it 'hard-deletes all records in the scope, including soft-deleted ones', :aggregate_failures do
+        expect(described_class.delete_all(permanent: true)).to eq(4)
+        expect(described_class.count).to eq(0)
+      end
+    end
+  end
+
+  describe '#variants.delete_all' do
+    let(:product) { create(:product, :with_variants) }
+    let!(:previously_deleted_variant) { create(:product_variant, :deleted, product:) }
+    let!(:variants) { product.variants.reload.to_a }
+
+    it 'soft-deletes the variants in the collection', :aggregate_failures do
+      expect(product.variants.delete_all).to eq(3)
+      expect(variants.map(&:reload)).to all be_deleted
+      expect(product.variants.reload).to be_empty
+    end
+
+    it 'sets the deleted-by user and deleted-in value' do
+      deleted_by = create(:user)
+      deleted_in = SecureRandom.uuid
+      product.variants.delete_all(deleted_by:, deleted_in:)
+      expect(variants.map(&:reload)).to all have_attributes(deleted_by:, deleted_in:)
+    end
+
+    context 'when permanent' do
+      it 'hard-deletes the variants in the collection', :aggregate_failures do
+        expect(product.variants.delete_all(permanent: true)).to eq(3)
+        expect(ProductVariant.where(id: variants)).to be_empty
+        expect(product.variants.reload).to be_empty
+      end
+
+      it 'leaves variants outside of the collection untouched' do
+        product.variants.delete_all(permanent: true)
+        expect(ProductVariant.exists?(previously_deleted_variant.id)).to be(true)
+      end
+    end
+
+    context 'when nullifying' do
+      it 'rejects deletion options' do
+        expect { product.variants.delete_all(:nullify, permanent: true) }
+          .to raise_error(ArgumentError, /does not support deletion options/)
+      end
+    end
+  end
+
+  describe '.destroy_all' do
+    let!(:products) { create_list(:product, 3, :with_variants) }
+    let!(:previously_deleted_product) { create(:product, :deleted) }
+
+    it 'soft-deletes the live records and their dependents in a single operation', :aggregate_failures do
+      described_class.destroy_all
+      expect(products.map(&:reload)).to all be_deleted
+      expect(products.map(&:deleted_in).uniq).to contain_exactly(be_present)
+      expect(ProductVariant.where(product: products).distinct.pluck(:deleted_in)).to eq([products.first.deleted_in])
+    end
+
+    it 'leaves previously soft-deleted records untouched' do
+      expect { described_class.destroy_all }.not_to(change { previously_deleted_product.reload.attributes })
+    end
+
+    it 'sets the deleted-by user and deleted-in value' do
+      deleted_by = create(:user)
+      deleted_in = SecureRandom.uuid
+      described_class.where(id: products).destroy_all(deleted_by:, deleted_in:)
+      expect(products.map(&:reload)).to all have_attributes(deleted_by:, deleted_in:)
+    end
+
+    context 'when permanent' do
+      it 'hard-deletes all records in the scope and their dependents, including deleted ones', :aggregate_failures do
+        described_class.destroy_all(permanent: true)
+        expect(described_class.count).to eq(0)
+        expect(ProductVariant.count).to eq(0)
+      end
+    end
+  end
+
+  describe '#variants.destroy_all' do
+    let(:product) { create(:product, :with_variants) }
+    let!(:previously_deleted_variant) { create(:product_variant, :deleted, product:) }
+    let!(:variants) { product.variants.reload.to_a }
+
+    it 'soft-deletes the variants in the collection in a single operation', :aggregate_failures do
+      product.variants.destroy_all
+      expect(variants.map(&:reload)).to all be_deleted
+      expect(variants.map(&:deleted_in).uniq).to contain_exactly(be_present)
+      expect(product.variants.reload).to be_empty
+    end
+
+    it 'sets the deleted-by user and deleted-in value' do
+      deleted_by = create(:user)
+      deleted_in = SecureRandom.uuid
+      product.variants.destroy_all(deleted_by:, deleted_in:)
+      expect(variants.map(&:reload)).to all have_attributes(deleted_by:, deleted_in:)
+    end
+
+    context 'when permanent' do
+      it 'hard-deletes the variants in the collection', :aggregate_failures do
+        product.variants.destroy_all(permanent: true)
+        expect(ProductVariant.where(id: variants)).to be_empty
+        expect(product.variants.reload).to be_empty
+      end
+
+      it 'leaves variants outside of the collection untouched' do
+        product.variants.destroy_all(permanent: true)
+        expect(ProductVariant.exists?(previously_deleted_variant.id)).to be(true)
+      end
+    end
   end
 
   describe '#save' do

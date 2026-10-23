@@ -95,6 +95,35 @@ RSpec.describe User, type: :model do
             deleted_by: user.deleted_by
           )
       end
+
+      context 'when permanent' do
+        subject(:destroy) { user.destroy(permanent: true) }
+
+        let!(:previously_deleted_product) { create(:product, :deleted, created_by: user) }
+
+        # destroy_async leaves dependents in place until the job runs, as it does in Rails
+        around(:each) do |example|
+          ActiveRecord::Base.connection.disable_referential_integrity { example.run }
+        end
+
+        it 'enqueues a job to hard-delete the created products, including soft-deleted ones', :aggregate_failures do
+          product_ids = Product.where(created_by_id: user.id).ids
+
+          expect(destroy).to be_truthy
+          expect(described_class.exists?(user.id)).to be(false)
+          expect(product_ids).to include(previously_deleted_product.id)
+          expect(SoftDeletable::SoftDeleteAsyncJob).to have_been_enqueued
+            .with(Product.name, match_array(product_ids), permanent: true)
+        end
+
+        it 'hard-deletes the created products when the job runs' do
+          product_ids = Product.where(created_by_id: user.id).ids
+
+          destroy
+          SoftDeletable::SoftDeleteAsyncJob.perform_now(Product.name, product_ids, permanent: true)
+          expect(Product.where(id: product_ids)).to be_empty
+        end
+      end
     end
   end
 
@@ -205,6 +234,28 @@ RSpec.describe User, type: :model do
             user.created_products.pluck(:id)
           )
       end
+    end
+  end
+
+  describe '#created_product_variants.delete_all' do
+    let(:user) { create(:user, :with_created_products, created_products_traits: [:with_variants]) }
+
+    it 'rejects deletion options for a through association', :aggregate_failures do
+      expect { user.created_product_variants.delete_all(permanent: true) }
+        .to raise_error(ArgumentError, /does not support deletion options/)
+      expect(Product.where(created_by_id: user.id).count).to eq(3)
+      expect(ProductVariant.joins(:product).where(products: { created_by_id: user.id }).count).to eq(9)
+    end
+  end
+
+  describe '#created_product_variants.destroy_all' do
+    let(:user) { create(:user, :with_created_products, created_products_traits: [:with_variants]) }
+
+    it 'rejects deletion options for a through association', :aggregate_failures do
+      expect { user.created_product_variants.destroy_all(permanent: true) }
+        .to raise_error(ArgumentError, /does not support deletion options/)
+      expect(Product.where(created_by_id: user.id).count).to eq(3)
+      expect(ProductVariant.joins(:product).where(products: { created_by_id: user.id }).count).to eq(9)
     end
   end
 

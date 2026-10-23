@@ -6,6 +6,7 @@ module SoftDeletable
     autoload :AssociationBuilderExtension, 'soft_deletable/association_extensions/association_builder_extension'
     autoload :AssociationExtension, 'soft_deletable/association_extensions/association_extension'
     autoload :AssociationScopeExtension, 'soft_deletable/association_extensions/association_scope_extension'
+    autoload :CollectionProxyExtension, 'soft_deletable/association_extensions/collection_proxy_extension'
     autoload :HasManyExtension, 'soft_deletable/association_extensions/has_many_extension'
     autoload :HasOneExtension, 'soft_deletable/association_extensions/has_one_extension'
     autoload :IncludesDeletedOption, 'soft_deletable/association_extensions/includes_deleted_option'

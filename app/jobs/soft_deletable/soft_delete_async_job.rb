@@ -12,16 +12,17 @@ module SoftDeletable
     #|   String model_name,
     #|   Array[Integer | String] ids,
     #|   ?deleted_by: ActiveRecord::Base?,
-    #|   ?deleted_in: String?
+    #|   ?deleted_in: String?,
+    #|   ?permanent: bool
     #| ) -> void
-    def perform(model_name, ids, deleted_by: nil, deleted_in: nil)
+    def perform(model_name, ids, deleted_by: nil, deleted_in: nil, permanent: false)
       model = model_name.constantize
       deleted_in ||= SecureRandom.uuid
 
       last_error = nil
 
       model.where(id: ids).find_each do |record|
-        record.destroy(deleted_by:, deleted_in:)
+        record.destroy(deleted_by:, deleted_in:, permanent:)
       rescue StandardError => error
         last_error = error
       end
