@@ -1,0 +1,66 @@
+name: Backfill
+
+on:
+  workflow_dispatch:
+    inputs:
+      tags:
+        description: 'Space-separated tags to publish (blank for all v* tags)'
+        required: false
+        default: ''
+
+jobs:
+  publish:
+    name: Publish tagged versions to GitHub Packages
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: read
+      packages: write
+
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Set up Ruby
+        uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: '4.0.9'
+      - name: Configure credentials
+        run: |
+          mkdir -p ~/.gem
+          printf -- "---\n:github: Bearer %s\n" "${GITHUB_TOKEN}" > ~/.gem/credentials
+          chmod 0600 ~/.gem/credentials
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Build and push tagged versions
+        run: |
+          host="https://rubygems.pkg.github.com/${GITHUB_REPOSITORY_OWNER}"
+          tags="${INPUT_TAGS:-$(git tag --list 'v*' --sort=v:refname)}"
+          failed=()
+
+          for tag in ${tags}; do
+            echo "::group::${tag}"
+            dir="$(mktemp -d)"
+            git archive "${tag}" | tar -x -C "${dir}"
+
+            sed -i \
+              -e "s|^\(\s*spec.metadata\['allowed_push_host'\]\) = .*|\1 = '${host}'\n  spec.metadata['github_repo'] = 'ssh://github.com/${GITHUB_REPOSITORY}'|" \
+              "${dir}/soft_deletable.gemspec"
+
+            if (cd "${dir}" && gem build soft_deletable.gemspec --output "${dir}/release.gem") &&
+               gem push --key github --host "${host}" "${dir}/release.gem"; then
+              echo "Published ${tag}"
+            else
+              echo "::warning::Failed to publish ${tag}"
+              failed+=("${tag}")
+            fi
+            echo "::endgroup::"
+          done
+
+          if [ "${#failed[@]}" -gt 0 ]; then
+            echo "::error::Failed to publish: ${failed[*]}"
+            exit 1
+          fi
+        env:
+          INPUT_TAGS: ${{ inputs.tags }}

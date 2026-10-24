@@ -14,9 +14,9 @@ Gem::Specification.new do |spec|
 
   spec.required_ruby_version = '>= 3.2'
 
-  # Prevent pushing this gem to RubyGems.org. To allow pushes either set the "allowed_push_host"
-  # to allow pushing to a single host or delete this section to allow pushing to any host.
-  spec.metadata['allowed_push_host'] = "TODO: Set to 'http://mygemserver.com'"
+  # Published to GitHub Packages, since the `soft_deletable` name on RubyGems.org belongs to another gem.
+  spec.metadata['allowed_push_host'] = 'https://rubygems.pkg.github.com/mintyfresh'
+  spec.metadata['github_repo'] = 'ssh://github.com/mintyfresh/soft_deletable'
 
   spec.metadata['homepage_uri'] = spec.homepage
   spec.metadata['source_code_uri'] = spec.homepage
