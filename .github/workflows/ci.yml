@@ -20,7 +20,7 @@ jobs:
           - '4.0.9'
 
     steps:
-    - uses: actions/checkout@v6
+    - uses: actions/checkout@v7
       with:
         persist-credentials: false
     - name: Set up Ruby
@@ -44,7 +44,7 @@ jobs:
           - '4.0.9'
 
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
         with:
           persist-credentials: false
       - name: Set up Ruby
@@ -86,7 +86,7 @@ jobs:
           - '4.0.9'
 
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
         with:
           persist-credentials: false
       - name: Set up Ruby
@@ -131,7 +131,7 @@ jobs:
           - '4.0.9'
 
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
         with:
           persist-credentials: false
       - name: Set up Ruby
