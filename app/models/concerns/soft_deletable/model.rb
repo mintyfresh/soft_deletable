@@ -21,9 +21,14 @@ module SoftDeletable
       after_commit :run_soft_delete_commit_callbacks, if: -> { saved_change_to_deleted?(to: true) }
       after_commit :run_restore_commit_callbacks, if: -> { saved_change_to_deleted?(to: false) }
 
+      with_options unless: :previously_new_record? do
+        after_soft_delete :handle_soft_delete_counters
+        after_restore :handle_restore_counters
+      end
+
       scope :deleted, -> { where.not(deleted_at: nil) }
       scope :not_deleted, -> { where(deleted_at: nil) }
-      scope :unscope_deleted, -> { unscope(where: :deleted_at) }
+      scope :unscope_deleted, -> { unscope(where: %i[deleted_at deleted_in]) }
 
       SoftDeletable::AssociationExtensions.install_dependency_callbacks_for_declared_associations(self)
     end
@@ -33,6 +38,28 @@ module SoftDeletable
       #
       #: -> bool
       def soft_deletable? = true
+
+      # Restores all soft-deleted records (see `SoftDeletable::RelationExtension#restore_all`).
+      #
+      #: -> Array[ActiveRecord::Base]
+      def restore_all
+        all.restore_all
+      end
+
+      # Restores the soft-deleted records matching the conditions (see `SoftDeletable::RelationExtension#restore_by`).
+      #
+      #: (*untyped args) -> Array[ActiveRecord::Base]
+      def restore_by(*args)
+        all.restore_by(*args)
+      end
+
+      # Restores all soft-deleted records without running callbacks
+      # (see `SoftDeletable::RelationExtension#undelete_all`).
+      #
+      #: -> Integer
+      def undelete_all
+        all.undelete_all
+      end
 
       # Specifies the job to use for soft-deleting records.
       # Defaults to `SoftDeletable::SoftDeleteAsyncJob`.
@@ -199,6 +226,16 @@ module SoftDeletable
     #: () { () -> void } -> void
     def run_restore_callbacks(&block)
       run_callbacks(:restore, &block)
+    end
+
+    #: -> void
+    def handle_soft_delete_counters
+      counter_cached_association_names.each { |name| association(name).handle_soft_delete_counters }
+    end
+
+    #: -> void
+    def handle_restore_counters
+      counter_cached_association_names.each { |name| association(name).handle_restore_counters }
     end
 
     #: -> void

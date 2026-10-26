@@ -267,11 +267,11 @@ RSpec.describe User, type: :model do
       deleted_product = create(:product, :deleted, created_by: user)
       create(:product_variant, product: deleted_product)
     end
-    let(:live_variants) { ProductVariant.where(product: user.created_products).not_deleted }
+    let(:non_deleted_variants) { ProductVariant.where(product: user.created_products).not_deleted }
 
     shared_examples 'filters every step' do
       it 'only includes variants that are not deleted, of products that are not deleted', :aggregate_failures do
-        expect(variants).to match_array(live_variants)
+        expect(variants).to match_array(non_deleted_variants)
         expect(variants).not_to include(previously_deleted_variant, variant_of_deleted_product)
       end
     end

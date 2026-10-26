@@ -4,15 +4,16 @@
 #
 # Table name: products
 #
-#  id            :integer          not null, primary key
-#  created_by_id :integer          not null
-#  name          :string           not null
-#  price_cents   :integer          not null
-#  created_at    :datetime         not null
-#  updated_at    :datetime         not null
-#  deleted_at    :datetime
-#  deleted_in    :string
-#  deleted_by_id :integer
+#  id             :integer          not null, primary key
+#  created_by_id  :integer          not null
+#  name           :string           not null
+#  price_cents    :integer          not null
+#  created_at     :datetime         not null
+#  updated_at     :datetime         not null
+#  deleted_at     :datetime
+#  deleted_in     :string
+#  deleted_by_id  :integer
+#  variants_count :integer          default(0), not null
 #
 # Indexes
 #

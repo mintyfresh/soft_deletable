@@ -80,6 +80,22 @@ module SoftDeletable
 
     private
 
+      # Mirrors ActiveRecord::Associations::HasManyAssociation#count_records,
+      # ignoring the counter cache of a deleted owner, since it only counts non-deleted records,
+      # whereas the association includes the records that were deleted together with the owner.
+      #
+      #: -> Integer
+      def count_records
+        return super unless filters_deleted? && owner_deleted_for_filtering?
+
+        if (count = scope.count(:all)).zero?
+          target.select!(&:new_record?)
+          loaded!
+        end
+
+        [association_scope.limit_value, count].compact.min
+      end
+
       # Deletion options would be silently ignored when the associated records aren't the ones being deleted.
       #
       #: (Symbol method_name) -> void

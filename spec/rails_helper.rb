@@ -21,6 +21,8 @@ rescue ActiveRecord::PendingMigrationError => error
   abort error.to_s.strip
 end
 
+RSpec::Matchers.define_negated_matcher :not_change, :change
+
 RSpec.configure do |config|
   config.include FactoryBot::Syntax::Methods
 

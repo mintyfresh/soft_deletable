@@ -3,7 +3,7 @@
 
 module SoftDeletable
   module RelationExtension
-    # Soft-deletes the live records of a soft-deletable relation without running callbacks,
+    # Soft-deletes the non-deleted records of a soft-deletable relation without running callbacks,
     # or hard-deletes every record in the relation if `permanent` is set.
     # Relations of models that aren't soft-deletable are always hard-deleted.
     #
@@ -27,6 +27,50 @@ module SoftDeletable
       return super() unless klass.try(:soft_deletable?)
 
       records.each { |record| record.destroy(deleted_in:, deleted_by:, permanent:) }.tap { reset }
+    end
+
+    # Restores the soft-deleted records of a relation without running callbacks.
+    #
+    #: -> Integer
+    def undelete_all
+      ensure_soft_deletable!(:undelete_all)
+
+      attributes = { deleted_at: nil }
+      attributes[:updated_at] = Time.current if has_attribute?(:updated_at)
+
+      where.not(deleted_at: nil).update_all(attributes) # rubocop:disable Rails/SkipsModelValidations
+    end
+
+    # Restores the soft-deleted records of a relation,
+    # running callbacks and cascading to dependents for each record.
+    #
+    #: -> Array[ActiveRecord::Base]
+    def restore_all
+      ensure_soft_deletable!(:restore_all)
+
+      where.not(deleted_at: nil).records.each(&:restore).tap { reset }
+    end
+
+    # Restores the soft-deleted records matching the conditions (see `restore_all`).
+    #
+    #: (*untyped args) -> Array[ActiveRecord::Base]
+    def restore_by(*args)
+      ensure_soft_deletable!(:restore_by)
+
+      where(*args).restore_all
+    end
+
+  private
+
+    # Relations of models that aren't soft-deletable have no deleted records to restore.
+    #
+    #: (Symbol method_name) -> void
+    def ensure_soft_deletable!(method_name)
+      return if klass.try(:soft_deletable?)
+
+      raise NoMethodError.new(
+        "#{klass.name} does not support #{method_name}, since it is not soft-deletable.", method_name
+      )
     end
   end
 end

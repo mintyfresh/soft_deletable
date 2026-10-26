@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_10_20_000000) do
+ActiveRecord::Schema[8.1].define(version: 2026_10_26_000000) do
   create_table "product_inventories", force: :cascade do |t|
     t.datetime "created_at", null: false
     t.datetime "deleted_at"
@@ -45,6 +45,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_20_000000) do
     t.string "name", null: false
     t.integer "price_cents", null: false
     t.datetime "updated_at", null: false
+    t.integer "variants_count", default: 0, null: false
     t.index ["created_by_id"], name: "index_products_on_created_by_id"
     t.index ["deleted_by_id"], name: "index_products_on_deleted_by_id"
   end

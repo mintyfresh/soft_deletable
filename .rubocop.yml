@@ -128,6 +128,9 @@ RSpec/MultipleMemoizedHelpers:
 RSpecRails/NegationBeValid:
   EnforcedStyle: be_invalid
 
+Rails/Delegate:
+  Enabled: false
+
 Rails/HasAndBelongsToMany:
   Enabled: false
 

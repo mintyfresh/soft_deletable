@@ -3,8 +3,8 @@
 
 module SoftDeletable
   # Filters associated records by their deleted state, according to the `includes_deleted` option of an association:
-  # * `:never` - Only live records are associated
-  # * `:together` - Live owners are associated with live records,
+  # * `:never` - Only non-deleted records are associated
+  # * `:together` - Non-deleted owners are associated with non-deleted records,
   #   and deleted owners are associated with records that were deleted in the same operation (ie. the same `deleted_in`)
   # * `:always` - Records are associated regardless of their deleted state
   module AssociationCondition
@@ -68,16 +68,16 @@ module SoftDeletable
       #|   deleted_in: String?
       #| ) -> Arel::Nodes::Node
       def owner_condition(reflection, table, deleted:, deleted_in:)
-        live = table[:deleted_at].eq(nil)
-        return live unless deleted && together?(reflection)
+        non_deleted = table[:deleted_at].eq(nil)
+        return non_deleted unless deleted && together?(reflection)
 
         deleted = table[:deleted_at].not_eq(nil).and(table[:deleted_in].eq(Arel::Nodes.build_quoted(deleted_in)))
-        reflection.belongs_to? ? live.or(deleted) : deleted
+        reflection.belongs_to? ? non_deleted.or(deleted) : deleted
       end
 
       # Filters the scope of an association loaded through a single owner.
       #
-      # A deleted owner's belongs_to also includes live records, since the record it belongs to may outlive it.
+      # A deleted owner's belongs_to also includes non-deleted records, since the record it belongs to may outlive it.
       #
       #: (
       #|   ActiveRecord::Reflection::AbstractReflection reflection,
@@ -102,13 +102,13 @@ module SoftDeletable
       #|   Class? foreign_klass
       #| ) -> Arel::Nodes::Node
       def join_condition(reflection, table, foreign_table, foreign_klass)
-        live = table[:deleted_at].eq(nil)
-        return live unless together?(reflection) && foreign_klass.try(:soft_deletable?)
+        non_deleted = table[:deleted_at].eq(nil)
+        return non_deleted unless together?(reflection) && foreign_klass.try(:soft_deletable?)
 
         deleted = table[:deleted_at].not_eq(nil).and(table[:deleted_in].eq(foreign_table[:deleted_in]))
-        deleted = live.or(deleted) if reflection.belongs_to?
+        deleted = non_deleted.or(deleted) if reflection.belongs_to?
 
-        Arel::Nodes::Case.new.when(foreign_table[:deleted_at].eq(nil)).then(live).else(deleted)
+        Arel::Nodes::Case.new.when(foreign_table[:deleted_at].eq(nil)).then(non_deleted).else(deleted)
       end
 
       # Filters the scope of an association joined from another table.
@@ -135,9 +135,9 @@ module SoftDeletable
       def for_preload(reflection, scope, owners)
         return scope.where(deleted_at: nil) unless together?(reflection)
 
-        deleted, live = owners.partition { |owner| owner.try(:deleted?) }
+        deleted, non_deleted = owners.partition { |owner| owner.try(:deleted?) }
         conditions = []
-        conditions << scope.where(deleted_at: nil) if live.any? || (deleted.any? && reflection.belongs_to?)
+        conditions << scope.where(deleted_at: nil) if non_deleted.any? || (deleted.any? && reflection.belongs_to?)
         conditions << deleted_together_with(scope, deleted) if deleted.any?
 
         conditions.reduce(:or) || scope

@@ -8,7 +8,7 @@ module SoftDeletable
       #
       #: -> bool
       def owner_deleted_for_filtering?
-        # while a soft-delete cascades, the owner is deleted in memory but its live records have yet to be deleted
+        # while a soft-delete cascades, the owner is deleted in memory but its associated records have yet to be deleted
         !!owner.try(:deleted?) && !cascading?(:soft_delete)
       end
 

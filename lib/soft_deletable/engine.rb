@@ -19,6 +19,7 @@ module SoftDeletable
     initializer 'soft_deletable.association_extensions' do
       ActiveSupport.on_load(:active_record) do
         extensions = SoftDeletable::AssociationExtensions
+        ActiveRecord::Associations::BelongsToAssociation.prepend(extensions::BelongsToExtension)
         ActiveRecord::Associations::HasManyAssociation.prepend(extensions::HasManyExtension)
         ActiveRecord::Associations::HasOneAssociation.prepend(extensions::HasOneExtension)
         ActiveRecord::Associations::CollectionProxy.prepend(extensions::CollectionProxyExtension)

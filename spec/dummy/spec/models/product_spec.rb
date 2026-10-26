@@ -4,15 +4,16 @@
 #
 # Table name: products
 #
-#  id            :integer          not null, primary key
-#  created_by_id :integer          not null
-#  name          :string           not null
-#  price_cents   :integer          not null
-#  created_at    :datetime         not null
-#  updated_at    :datetime         not null
-#  deleted_at    :datetime
-#  deleted_in    :string
-#  deleted_by_id :integer
+#  id             :integer          not null, primary key
+#  created_by_id  :integer          not null
+#  name           :string           not null
+#  price_cents    :integer          not null
+#  created_at     :datetime         not null
+#  updated_at     :datetime         not null
+#  deleted_at     :datetime
+#  deleted_in     :string
+#  deleted_by_id  :integer
+#  variants_count :integer          default(0), not null
 #
 # Indexes
 #
@@ -346,7 +347,7 @@ RSpec.describe Product, type: :model do
     let!(:products) { create_list(:product, 3) }
     let!(:previously_deleted_product) { create(:product, :deleted) }
 
-    it 'soft-deletes the live records in a single operation', :aggregate_failures do
+    it 'soft-deletes the non-deleted records in a single operation', :aggregate_failures do
       expect(described_class.delete_all).to eq(3)
       expect(products.map(&:reload)).to all be_deleted
       expect(products.map(&:deleted_in).uniq).to contain_exactly(be_present)
@@ -420,7 +421,7 @@ RSpec.describe Product, type: :model do
     let!(:products) { create_list(:product, 3, :with_variants) }
     let!(:previously_deleted_product) { create(:product, :deleted) }
 
-    it 'soft-deletes the live records and their dependents in a single operation', :aggregate_failures do
+    it 'soft-deletes the non-deleted records and their dependents in a single operation', :aggregate_failures do
       described_class.destroy_all
       expect(products.map(&:reload)).to all be_deleted
       expect(products.map(&:deleted_in).uniq).to contain_exactly(be_present)
@@ -459,6 +460,10 @@ RSpec.describe Product, type: :model do
       expect(product.variants.reload).to be_empty
     end
 
+    it 'decrements the counter cache' do
+      expect { product.variants.destroy_all }.to change { product.reload.variants_count }.from(3).to(0)
+    end
+
     it 'sets the deleted-by user and deleted-in value' do
       deleted_by = create(:user)
       deleted_in = SecureRandom.uuid
@@ -477,6 +482,138 @@ RSpec.describe Product, type: :model do
         product.variants.destroy_all(permanent: true)
         expect(ProductVariant.exists?(previously_deleted_variant.id)).to be(true)
       end
+    end
+  end
+
+  describe '.restore_all' do
+    let!(:deleted_product) { create(:product, :with_variants).tap(&:destroy!) }
+    let!(:other_deleted_product) { create(:product).tap(&:destroy!) }
+    let!(:non_deleted_product) { create(:product) }
+
+    it 'restores the deleted records and returns them', :aggregate_failures do
+      expect(described_class.restore_all).to contain_exactly(deleted_product, other_deleted_product)
+      expect([deleted_product, other_deleted_product].map(&:reload)).to all have_attributes(deleted: false)
+    end
+
+    it 'cascades the restoration to their dependents' do
+      described_class.restore_all
+      expect(ProductVariant.where(product: deleted_product)).to contain_exactly(
+        have_attributes(deleted: false), have_attributes(deleted: false), have_attributes(deleted: false)
+      )
+    end
+
+    it 'leaves non-deleted records untouched' do
+      expect { described_class.restore_all }.not_to(change { non_deleted_product.reload.attributes })
+    end
+
+    it 'only restores the records in the relation', :aggregate_failures do
+      expect(described_class.where(id: deleted_product).restore_all).to contain_exactly(deleted_product)
+      expect(other_deleted_product.reload).to be_deleted
+    end
+  end
+
+  describe '.restore_by' do
+    let!(:deleted_product) { create(:product).tap(&:destroy!) }
+    let!(:other_deleted_product) { create(:product).tap(&:destroy!) }
+
+    it 'restores the deleted records matching the conditions', :aggregate_failures do
+      expect(described_class.restore_by(id: deleted_product.id)).to contain_exactly(deleted_product)
+      expect(deleted_product.reload).not_to be_deleted
+      expect(other_deleted_product.reload).to be_deleted
+    end
+  end
+
+  describe '.undelete_all' do
+    let!(:deleted_product) { create(:product, :with_variants).tap(&:destroy!) }
+    let!(:other_deleted_product) { create(:product).tap(&:destroy!) }
+    let!(:non_deleted_product) { create(:product) }
+
+    it 'restores the deleted records and returns their count', :aggregate_failures do
+      expect(described_class.undelete_all).to eq(2)
+      expect([deleted_product, other_deleted_product].map(&:reload)).to all have_attributes(deleted: false)
+    end
+
+    it 'does not cascade the restoration to their dependents' do
+      described_class.undelete_all
+      expect(ProductVariant.where(product: deleted_product)).to be_present.and all have_attributes(deleted: true)
+    end
+
+    it 'leaves non-deleted records untouched' do
+      expect { described_class.undelete_all }.not_to(change { non_deleted_product.reload.attributes })
+    end
+
+    it 'only restores the records in the relation', :aggregate_failures do
+      expect(described_class.where(id: deleted_product).undelete_all).to eq(1)
+      expect(other_deleted_product.reload).to be_deleted
+    end
+  end
+
+  describe '#variants.restore_all' do
+    let!(:product) { create(:product) }
+    let!(:deleted_variant) { create(:product_variant, :deleted, product:) }
+
+    it 'does not restore variants hidden by the collection' do
+      expect(product.variants.restore_all).to be_empty
+    end
+
+    it 'restores the deleted variants when the collection includes them', :aggregate_failures do
+      expect(product.all_variants.restore_all).to contain_exactly(deleted_variant)
+      expect(deleted_variant.reload).not_to be_deleted
+      expect(product.variants.reload).to contain_exactly(deleted_variant)
+    end
+
+    it 'restores the deleted variants when the collection is unscoped from its deleted state', :aggregate_failures do
+      expect(product.variants.unscope_deleted.restore_all).to contain_exactly(deleted_variant)
+      expect(deleted_variant.reload).not_to be_deleted
+      expect(product.variants.reload).to contain_exactly(deleted_variant)
+    end
+
+    it 'restores the deleted variants when the collection is rescoped to deleted variants', :aggregate_failures do
+      expect(product.variants.unscope_deleted.deleted.restore_all).to contain_exactly(deleted_variant)
+      expect(deleted_variant.reload).not_to be_deleted
+      expect(product.variants.reload).to contain_exactly(deleted_variant)
+    end
+
+    context 'when the product is deleted' do
+      let!(:variant_deleted_together) { create(:product_variant, product:) }
+
+      before(:each) do
+        product.destroy!
+      end
+
+      it 'restores the variants deleted separately and together when the collection is unscoped', :aggregate_failures do
+        expect(product.variants.unscope_deleted.restore_all)
+          .to contain_exactly(deleted_variant, variant_deleted_together)
+        expect([deleted_variant, variant_deleted_together].map(&:reload)).to all have_attributes(deleted: false)
+        expect(product.reload).to be_deleted
+      end
+
+      it 'restores the variants deleted separately and together when the collection is rescoped' do
+        expect(product.variants.unscope_deleted.deleted.restore_all)
+          .to contain_exactly(deleted_variant, variant_deleted_together)
+      end
+    end
+  end
+
+  describe '#variants.undelete_all' do
+    let!(:product) { create(:product) }
+    let!(:deleted_variant) { create(:product_variant, :deleted, product:) }
+
+    it 'restores the deleted variants when the collection is unscoped from its deleted state', :aggregate_failures do
+      expect(product.variants.unscope_deleted.undelete_all).to eq(1)
+      expect(deleted_variant.reload).not_to be_deleted
+    end
+  end
+
+  describe 'restoring a relation of a model that is not soft-deletable' do
+    let!(:plain_product_class) do
+      stub_const('PlainProduct', Class.new(ApplicationRecord) { self.table_name = 'products' })
+    end
+
+    it 'rejects the restoration', :aggregate_failures do
+      expect { plain_product_class.all.restore_all }.to raise_error(NoMethodError, /not soft-deletable/)
+      expect { plain_product_class.all.undelete_all }.to raise_error(NoMethodError, /not soft-deletable/)
+      expect { plain_product_class.all.restore_by(id: 1) }.to raise_error(NoMethodError, /not soft-deletable/)
     end
   end
 
@@ -692,6 +829,11 @@ RSpec.describe Product, type: :model do
         expect(product.variants).not_to include(previously_deleted_variant)
       end
 
+      it 'counts variants deleted in the same operation, rather than reading the counter cache', :aggregate_failures do
+        expect(product.variants_count).to eq(0)
+        expect(product.variants.size).to eq(3)
+      end
+
       it 'includes the inventory deleted in the same operation' do
         expect(product.inventory).to have_attributes(deleted: true, deleted_in: product.deleted_in)
       end
@@ -712,7 +854,7 @@ RSpec.describe Product, type: :model do
 
     context 'when preloading for deleted and non-deleted products' do
       let!(:deleted_product) { create(:product, :with_inventory, :with_variants).tap(&:destroy!) }
-      let!(:live_variant) { create(:product_variant, product: deleted_product) }
+      let!(:non_deleted_variant) { create(:product_variant, product: deleted_product) }
 
       %i[preload eager_load].each do |method|
         context "with #{method}" do
@@ -730,7 +872,7 @@ RSpec.describe Product, type: :model do
             expect(products[deleted_product.id].variants).to be_present.and all have_attributes(
               deleted: true, deleted_in: deleted_product.deleted_in
             )
-            expect(products[deleted_product.id].variants).not_to include(live_variant)
+            expect(products[deleted_product.id].variants).not_to include(non_deleted_variant)
             expect(products[deleted_product.id].inventory).to have_attributes(deleted_in: deleted_product.deleted_in)
           end
         end
@@ -766,11 +908,12 @@ RSpec.describe Product, type: :model do
       end
 
       it 'only includes variants that are not deleted, even though the product is deleted', :aggregate_failures do
-        live_variant = create(:product_variant, product:)
-        expect(product.live_variants).to contain_exactly(live_variant)
-        expect(described_class.preload(:live_variants).find(product.id).live_variants).to contain_exactly(live_variant)
-        expect(described_class.joins(:live_variants).where(id: product).pluck('product_variants.id'))
-          .to contain_exactly(live_variant.id)
+        non_deleted_variant = create(:product_variant, product:)
+        expect(product.non_deleted_variants).to contain_exactly(non_deleted_variant)
+        expect(described_class.preload(:non_deleted_variants).find(product.id).non_deleted_variants)
+          .to contain_exactly(non_deleted_variant)
+        expect(described_class.joins(:non_deleted_variants).where(id: product).pluck('product_variants.id'))
+          .to contain_exactly(non_deleted_variant.id)
       end
     end
 
@@ -793,9 +936,9 @@ RSpec.describe Product, type: :model do
 
   describe 'has_and_belongs_to_many association filtering' do
     let(:product) { create(:product) }
-    let(:live_tag) { create(:tag) }
+    let(:non_deleted_tag) { create(:tag) }
     let(:previously_deleted_tag) { create(:tag, :deleted) }
-    let(:tags) { [live_tag, previously_deleted_tag] }
+    let(:tags) { [non_deleted_tag, previously_deleted_tag] }
 
     before(:each) do
       product.tags << tags
@@ -818,14 +961,14 @@ RSpec.describe Product, type: :model do
     end
 
     context 'when the product is not deleted' do
-      let(:expected_tags) { [live_tag] }
+      let(:expected_tags) { [non_deleted_tag] }
 
       it_behaves_like 'filters the tags'
     end
 
     context 'when the product is deleted' do
       let(:tag_deleted_together) { create(:tag) }
-      let(:tags) { [live_tag, previously_deleted_tag, tag_deleted_together] }
+      let(:tags) { [non_deleted_tag, previously_deleted_tag, tag_deleted_together] }
       let(:expected_tags) { [tag_deleted_together] }
 
       before(:each) do
@@ -839,7 +982,7 @@ RSpec.describe Product, type: :model do
 
   describe 'association filtering with models that are not soft-deletable' do
     let(:product) { create(:product, :with_variants) }
-    let(:live_variant_ids) { ProductVariant.where(product:).not_deleted.ids }
+    let(:non_deleted_variant_ids) { ProductVariant.where(product:).not_deleted.ids }
     let(:all_variant_ids) { ProductVariant.where(product:).ids }
 
     before(:each) do
@@ -869,8 +1012,8 @@ RSpec.describe Product, type: :model do
       %i[owner preload eager_load joins].each do |loaded_by|
         context "when loaded by #{loaded_by}" do
           it 'only includes variants that are not deleted for :never and :together', :aggregate_failures do
-            expect(variant_ids(PlainProduct, :never_variants, loaded_by)).to match_array(live_variant_ids)
-            expect(variant_ids(PlainProduct, :together_variants, loaded_by)).to match_array(live_variant_ids)
+            expect(variant_ids(PlainProduct, :never_variants, loaded_by)).to match_array(non_deleted_variant_ids)
+            expect(variant_ids(PlainProduct, :together_variants, loaded_by)).to match_array(non_deleted_variant_ids)
           end
 
           it 'includes all variants for :always' do

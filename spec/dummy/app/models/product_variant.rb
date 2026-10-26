@@ -27,7 +27,7 @@
 class ProductVariant < ApplicationRecord
   include SoftDeletable::Model
 
-  belongs_to :product, inverse_of: :variants, includes_deleted: :together
+  belongs_to :product, counter_cache: :variants_count, includes_deleted: :together, inverse_of: :variants
 
   validates :name, presence: true
   validates :price_cents, presence: true, numericality: { greater_than: 0 }
