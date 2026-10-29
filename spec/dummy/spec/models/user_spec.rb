@@ -90,7 +90,7 @@ RSpec.describe User, type: :model do
           .on_queue(SoftDeletable.config.delete_job_queue)
           .with(
             Product.name,
-            user.created_products.pluck(:id),
+            match_array(user.created_products.pluck(:id)),
             deleted_in: user.deleted_in,
             deleted_by: user.deleted_by
           )
@@ -201,7 +201,7 @@ RSpec.describe User, type: :model do
           .on_queue(SoftDeletable.config.restore_job_queue)
           .with(
             Product.name,
-            user.created_products.pluck(:id)
+            match_array(user.created_products.pluck(:id))
           )
       end
 
@@ -212,7 +212,7 @@ RSpec.describe User, type: :model do
           .on_queue(SoftDeletable.config.restore_job_queue)
           .with(
             Product.name,
-            Product.where(created_by: user).excluding(other_product).pluck(:id)
+            match_array(Product.where(created_by: user).excluding(other_product).pluck(:id))
           )
       end
     end
@@ -231,7 +231,7 @@ RSpec.describe User, type: :model do
           .on_queue(SoftDeletable.config.restore_job_queue)
           .with(
             Product.name,
-            user.created_products.pluck(:id)
+            match_array(user.created_products.pluck(:id))
           )
       end
     end
