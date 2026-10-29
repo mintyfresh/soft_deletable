@@ -10,6 +10,7 @@ module SoftDeletable
       #
       #: -> void
       def handle_soft_delete_dependency
+        return handle_soft_delete_restriction if restricts_dependents?
         return unless should_cascade_soft_delete?
 
         with_reentrancy_protection(:soft_delete) do
@@ -84,7 +85,13 @@ module SoftDeletable
         reset # purge the association cache
       end
 
-      #: (Symbol operation) { () -> void } -> void
+      #: -> bool
+      def soft_delete_restricted?
+        record = load_target
+        !!record && !record.try(:deleted?)
+      end
+
+      #: [T] (Symbol operation) { () -> T } -> T?
       def with_reentrancy_protection(operation, &block)
         name = :"@__cascading_#{operation}"
         return if instance_variable_get(name)

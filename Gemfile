@@ -18,4 +18,5 @@ gem 'rubocop-rails', require: false
 gem 'rubocop-rspec', require: false
 gem 'rubocop-rspec_rails', require: false
 gem 'sqlite3', '~> 2.1'
+gem 'tapioca', require: false
 gem 'trilogy'

@@ -4,6 +4,8 @@
 module SoftDeletable
   module AssociationExtensions
     module AssociationExtension
+      RESTRICT_DEPENDENTS = %i[restrict_with_exception restrict_with_error].freeze
+
       # Checks if the owner should be treated as deleted when filtering its associated records.
       #
       #: -> bool
@@ -13,6 +15,31 @@ module SoftDeletable
       end
 
     private
+
+      #: -> bool
+      def restricts_dependents?
+        options[:dependent].in?(RESTRICT_DEPENDENTS)
+      end
+
+      # Blocks soft-deleting an owner with non-deleted associated records, as hard-deleting it would be blocked.
+      #
+      #: -> void
+      def handle_soft_delete_restriction
+        return if skip_restriction_on_soft_delete?
+
+        # the owner is deleted in memory, but its associated records are those of a non-deleted owner
+        return unless with_reentrancy_protection(:soft_delete) { soft_delete_restricted? }
+        raise ActiveRecord::DeleteRestrictionError, reflection.name if options[:dependent] == :restrict_with_exception
+
+        record = owner.class.human_attribute_name(reflection.name).downcase
+        owner.errors.add(:base, :"restrict_dependent_destroy.#{reflection.macro}", record:)
+        throw(:abort)
+      end
+
+      #: -> bool
+      def skip_restriction_on_soft_delete?
+        options.fetch(:skip_restriction_on_soft_delete) { SoftDeletable.config.skip_restriction_on_soft_delete }
+      end
 
       # The association's scope, including associated records regardless of their deleted state.
       #

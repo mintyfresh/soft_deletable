@@ -4,7 +4,11 @@
 module SoftDeletable
   module AssociationExtensions
     module ReflectionExtension
-      #: (Arel::Table table, Arel::Table foreign_table, singleton(ActiveRecord::Base) foreign_klass) -> ActiveRecord::Relation
+      #: (
+      #|   Arel::Table | Arel::Nodes::TableAlias table,
+      #|   Arel::Table | Arel::Nodes::TableAlias foreign_table,
+      #|   singleton(ActiveRecord::Base) foreign_klass
+      #| ) -> ActiveRecord::Relation
       def join_scope(table, foreign_table, foreign_klass)
         scope = super
         step = AssociationCondition.step_reflection(self)

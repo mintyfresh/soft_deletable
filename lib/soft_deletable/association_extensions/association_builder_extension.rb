@@ -7,7 +7,7 @@ module SoftDeletable
       module ClassMethods
         #: (
         #|   singleton(ActiveRecord::Base) model,
-        #|   ActiveRecord::Reflection::AssociationReflection reflection
+        #|   ActiveRecord::Reflection::AssociationReflection | ActiveRecord::Reflection::ThroughReflection reflection
         #| ) -> void
         def add_destroy_callbacks(model, reflection)
           result = super
@@ -19,7 +19,7 @@ module SoftDeletable
         end
       end
 
-      #: (singleton(ActiveRecord::Associations::Association) base) -> void
+      #: (singleton(ActiveRecord::Associations::Builder::Association) base) -> void
       def self.prepended(base)
         super
         class << base

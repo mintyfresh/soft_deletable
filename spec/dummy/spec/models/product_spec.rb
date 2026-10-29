@@ -286,6 +286,184 @@ RSpec.describe Product, type: :model do
     end
   end
 
+  describe 'soft-deletion with restricted dependents' do
+    let(:product) { create(:product) }
+    let(:exception_restricting_product) { ExceptionRestrictingProduct.find(product.id) }
+    let(:error_restricting_product) { ErrorRestrictingProduct.find(product.id) }
+
+    before(:each) do
+      stub_const('ExceptionRestrictingProduct', Class.new(ApplicationRecord) do
+        self.table_name = 'products'
+        include SoftDeletable::Model
+
+        has_many :variants, class_name: 'ProductVariant', foreign_key: :product_id,
+                            inverse_of: false, dependent: :restrict_with_exception
+        has_one :inventory, class_name: 'ProductInventory', foreign_key: :product_id,
+                            inverse_of: false, dependent: :restrict_with_exception
+      end)
+
+      stub_const('ErrorRestrictingProduct', Class.new(ApplicationRecord) do
+        self.table_name = 'products'
+        include SoftDeletable::Model
+
+        has_many :variants, class_name: 'ProductVariant', foreign_key: :product_id,
+                            inverse_of: false, dependent: :restrict_with_error
+        has_one :inventory, class_name: 'ProductInventory', foreign_key: :product_id,
+                            inverse_of: false, dependent: :restrict_with_error
+      end)
+    end
+
+    context 'with a non-deleted variant' do
+      let!(:variant) { create(:product_variant, product:) }
+
+      it 'raises when restricted with an exception', :aggregate_failures do
+        expect { exception_restricting_product.destroy }.to raise_error(ActiveRecord::DeleteRestrictionError)
+        expect(exception_restricting_product).not_to be_deleted
+        expect(product.reload).not_to be_deleted
+        expect(variant.reload).not_to be_deleted
+      end
+
+      it 'adds an error when restricted with an error', :aggregate_failures do
+        expect(error_restricting_product.destroy).to be(false)
+        expect(error_restricting_product).not_to be_deleted
+        expect(error_restricting_product.errors.full_messages).to eq(
+          ['Cannot delete record because dependent variants exist']
+        )
+        expect(product.reload).not_to be_deleted
+        expect(variant.reload).not_to be_deleted
+      end
+
+      it 'raises from destroy! when restricted with an error', :aggregate_failures do
+        expect { error_restricting_product.destroy! }.to raise_error(ActiveRecord::RecordNotDestroyed)
+        expect(error_restricting_product).not_to be_deleted
+        expect(product.reload).not_to be_deleted
+      end
+
+      it 'raises when permanently deleted', :aggregate_failures do
+        expect { exception_restricting_product.destroy(permanent: true) }
+          .to raise_error(ActiveRecord::DeleteRestrictionError)
+        expect(described_class.exists?(product.id)).to be(true)
+      end
+    end
+
+    context 'with a previously deleted variant' do
+      let!(:previously_deleted_variant) { create(:product_variant, :deleted, product:) }
+
+      it 'soft-deletes the product when restricted with an exception', :aggregate_failures do
+        expect(exception_restricting_product.destroy).to be_truthy
+        expect(product.reload).to be_deleted
+        expect { previously_deleted_variant.reload }.not_to(change { previously_deleted_variant.attributes })
+      end
+
+      it 'soft-deletes the product when restricted with an error', :aggregate_failures do
+        expect(error_restricting_product.destroy).to be_truthy
+        expect(product.reload).to be_deleted
+        expect { previously_deleted_variant.reload }.not_to(change { previously_deleted_variant.attributes })
+      end
+    end
+
+    context 'with a non-deleted inventory' do
+      let!(:inventory) { create(:product_inventory, product:) }
+
+      it 'raises when restricted with an exception', :aggregate_failures do
+        expect { exception_restricting_product.destroy }.to raise_error(ActiveRecord::DeleteRestrictionError)
+        expect(exception_restricting_product).not_to be_deleted
+        expect(product.reload).not_to be_deleted
+        expect(inventory.reload).not_to be_deleted
+      end
+
+      it 'adds an error when restricted with an error', :aggregate_failures do
+        expect(error_restricting_product.destroy).to be(false)
+        expect(error_restricting_product).not_to be_deleted
+        expect(error_restricting_product.errors.full_messages).to eq(
+          ['Cannot delete record because a dependent inventory exists']
+        )
+        expect(product.reload).not_to be_deleted
+        expect(inventory.reload).not_to be_deleted
+      end
+    end
+
+    context 'with a previously deleted inventory' do
+      let!(:previously_deleted_inventory) { create(:product_inventory, :deleted, product:) }
+
+      it 'soft-deletes the product without changing the inventory', :aggregate_failures do
+        expect(exception_restricting_product.destroy).to be_truthy
+        expect(product.reload).to be_deleted
+        expect { previously_deleted_inventory.reload }.not_to(change { previously_deleted_inventory.attributes })
+      end
+    end
+
+    context 'when skipping the restriction on soft-delete' do
+      let!(:variant) { create(:product_variant, product:) }
+      let!(:inventory) { create(:product_inventory, product:) }
+      let(:skipping_product) { SkippingProduct.find(product.id) }
+
+      before(:each) do
+        stub_const('SkippingProduct', Class.new(ApplicationRecord) do
+          self.table_name = 'products'
+          include SoftDeletable::Model
+
+          with_options foreign_key: :product_id, inverse_of: false, skip_restriction_on_soft_delete: true do
+            has_many :variants, class_name: 'ProductVariant', dependent: :restrict_with_exception
+            has_one :inventory, class_name: 'ProductInventory', dependent: :restrict_with_error
+          end
+        end)
+      end
+
+      it 'soft-deletes the product without changing its dependents', :aggregate_failures do
+        expect(skipping_product.destroy).to be_truthy
+        expect(product.reload).to be_deleted
+        expect(variant.reload).not_to be_deleted
+        expect(inventory.reload).not_to be_deleted
+      end
+
+      it 'still raises when permanently deleted', :aggregate_failures do
+        expect { skipping_product.destroy(permanent: true) }.to raise_error(ActiveRecord::DeleteRestrictionError)
+        expect(described_class.exists?(product.id)).to be(true)
+      end
+    end
+
+    context 'when skipping the restriction on soft-delete by default' do
+      let!(:variant) { create(:product_variant, product:) }
+
+      before(:each) do
+        allow(SoftDeletable).to receive(:config)
+          .and_return(SoftDeletable.config.dup.tap { |config| config.skip_restriction_on_soft_delete = true })
+
+        stub_const('EnforcingProduct', Class.new(ApplicationRecord) do
+          self.table_name = 'products'
+          include SoftDeletable::Model
+
+          has_many :variants, class_name: 'ProductVariant', foreign_key: :product_id,
+                              inverse_of: false, dependent: :restrict_with_exception,
+                              skip_restriction_on_soft_delete: false
+        end)
+      end
+
+      it 'soft-deletes the product without changing its variants', :aggregate_failures do
+        expect(exception_restricting_product.destroy).to be_truthy
+        expect(product.reload).to be_deleted
+        expect(variant.reload).not_to be_deleted
+      end
+
+      it 'raises when the association overrides the default', :aggregate_failures do
+        expect { EnforcingProduct.find(product.id).destroy }.to raise_error(ActiveRecord::DeleteRestrictionError)
+        expect(product.reload).not_to be_deleted
+      end
+    end
+
+    it 'rejects skipping the restriction on soft-delete for associations that do not restrict deletion' do
+      expect do
+        Class.new(ApplicationRecord) do
+          self.table_name = 'products'
+
+          has_many :variants, class_name: 'ProductVariant', foreign_key: :product_id,
+                              inverse_of: false, dependent: :destroy, skip_restriction_on_soft_delete: true
+        end
+      end.to raise_error(ArgumentError, /cannot use skip_restriction_on_soft_delete/)
+    end
+  end
+
   describe '#mark_for_destruction' do
     let(:product) { create(:product, :with_variants, :with_inventory) }
     let(:autosaving_product) { AutosavingProduct.find(product.id) }

@@ -7,7 +7,7 @@ module SoftDeletable
     # (The join model has no deleted state, so the target is filtered by the owner's table instead.)
     module JoinAssociationExtension
       #: (
-      #|   Arel::Table foreign_table,
+      #|   Arel::Table | Arel::Nodes::TableAlias foreign_table,
       #|   singleton(ActiveRecord::Base) foreign_klass,
       #|   singleton(Arel::Nodes::Join) join_type,
       #|   ActiveRecord::Associations::AliasTracker alias_tracker

@@ -14,6 +14,8 @@ module SoftDeletable
     autoload :JoinAssociationExtension, 'soft_deletable/association_extensions/join_association_extension'
     autoload :PreloaderExtension, 'soft_deletable/association_extensions/preloader_extension'
     autoload :ReflectionExtension, 'soft_deletable/association_extensions/reflection_extension'
+    autoload :SkipRestrictionOnSoftDeleteOption,
+             'soft_deletable/association_extensions/skip_restriction_on_soft_delete_option'
     autoload :ThroughPreloaderExtension, 'soft_deletable/association_extensions/through_preloader_extension'
 
     class << self

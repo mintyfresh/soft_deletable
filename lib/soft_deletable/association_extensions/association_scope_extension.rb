@@ -8,7 +8,7 @@ module SoftDeletable
     module AssociationScopeExtension
     private
 
-      #: (ActiveRecord::Relation scope, ActiveRecord::Base owner, Array[untyped] chain) -> ActiveRecord::Relation
+      #: (ActiveRecord::Relation _scope, ActiveRecord::Base owner, Array[untyped] chain) -> ActiveRecord::Relation
       def add_constraints(_scope, owner, chain)
         scope = super
         return scope if chain.one?

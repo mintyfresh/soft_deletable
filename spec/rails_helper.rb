@@ -4,6 +4,10 @@
 require 'spec_helper'
 ENV['RAILS_ENV'] ||= 'test'
 
+# Translates the inline RBS signatures of files loaded from here on into runtime-checked Sorbet signatures,
+# as Tapioca does when it loads the gem in an application.
+require 'tapioca/internal'
+
 require_relative 'dummy/config/environment'
 # Prevent database truncation if the environment is production
 abort('The Rails environment is running in production mode!') if Rails.env.production?

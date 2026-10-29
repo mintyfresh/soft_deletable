@@ -17,4 +17,11 @@ SoftDeletable.configure do |config|
   # Defaults to `'User'`.
   #
   # config.user_class_name = 'User'
+
+  # Whether `dependent: :restrict_with_exception` and `dependent: :restrict_with_error` associations
+  # allow soft-deletion despite non-deleted associated records (hard-deletion is always restricted).
+  # Can be overridden per association with the `skip_restriction_on_soft_delete:` option.
+  # Defaults to `false`.
+  #
+  # config.skip_restriction_on_soft_delete = false
 end

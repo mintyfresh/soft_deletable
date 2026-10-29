@@ -59,6 +59,13 @@ SoftDeletable.configure do |config|
   # Defaults to `'User'`.
   #
   # config.user_class_name = 'User'
+
+  # Whether `dependent: :restrict_with_exception` and `dependent: :restrict_with_error` associations
+  # allow soft-deletion despite non-deleted associated records (hard-deletion is always restricted).
+  # Can be overridden per association with the `skip_restriction_on_soft_delete:` option.
+  # Defaults to `false`.
+  #
+  # config.skip_restriction_on_soft_delete = false
 end
 ```
 
@@ -372,8 +379,23 @@ When using `has_one` and `has_many` associations, the following `dependent:` beh
 - `:destroy` - Cascades soft-deletion to the associated records, triggering validations and callbacks for each of the dependent records.
 - `:destroy_async` - Cascade soft-deletion via background jobs, triggering validations and callbacks for each of the dependent records.
 - `:delete` or `:delete_all` - Cascade soft-deletion without triggering validations or callbacks on the dependent records.
+- `:restrict_with_exception` - Raises `ActiveRecord::DeleteRestrictionError` if any non-deleted records are associated.
+- `:restrict_with_error` - Adds an error to the record and halts soft-deletion if any non-deleted records are associated
+  (`destroy` returns `false`, and `destroy!` raises `ActiveRecord::RecordNotDestroyed`).
 
-**NOTE:** Dependent callbacks will *only* be processed for other SoftDeletable models upon soft-deletion.
+**NOTE:** Cascading dependent callbacks will *only* be processed for other SoftDeletable models upon soft-deletion.
+Restrictions apply to any associated records, but previously soft-deleted records never restrict soft-deletion.
+
+To restrict only hard-deletion, use the `skip_restriction_on_soft_delete:` option
+(which defaults to `config.skip_restriction_on_soft_delete`):
+
+```ruby
+class Customer < ApplicationRecord
+  include SoftDeletable::Model
+
+  has_many :orders, dependent: :restrict_with_exception, skip_restriction_on_soft_delete: true
+end
+```
 
 So, given the scenario:
 
@@ -468,6 +490,7 @@ That said, not everyone shares these opinions, and there's plenty of other optio
 | Relation `.delete_all` soft-deletes | Yes                                                                                                 | Opt-in (`delete_all_enabled`)                                                                                 | Yes                                                                    | No (`discard_all` instead)                      | No                                                                   |
 | Hard-deletion                       | `destroy(permanent: true)`                                                                          | `really_destroy!`                                                                                             | `destroy_fully!`, or destroying twice                                  | `destroy`                                       | `destroy(:force)`                                                    |
 | Cascading soft-deletion             | `dependent: :destroy`, `:destroy_async`, `:delete`, and `:delete_all` (soft-deletable records only) | `dependent: :destroy` (non-paranoid records are hard-deleted)                                                 | `dependent: :destroy`                                                  | No (manual, via callbacks)                      | `dependent: :destroy`                                                |
+| `dependent: :restrict_with_*`       | Yes, by non-deleted records (opt-out with `skip_restriction_on_soft_delete:`)                       | Yes (via `destroy` callbacks)                                                                                 | Yes (via `destroy` callbacks)                                          | No (`discard` skips `destroy` callbacks)        | Yes (via `destroy` callbacks)                                        |
 | Cascading restoration               | Deterministic, records deleted in the same operation (`deleted_in`)                                 | Heuristic, opt-in (`recursive: true`), all deleted dependents or those deleted within an optional time window | Heuristic, records deleted within a time window                        | No (manual, via callbacks)                      | Heuristic, records deleted within a time window                      |
 | Deleted-state-aware associations    | Automatic, including joins and eager-loading                                                        | Manual (`belongs_to :x, -> { with_deleted }`)                                                                 | `belongs_to :x, with_deleted: true`                                    | Manual (via joins)                              | Manual                                                               |
 | Nested attributes (`_destroy`)      | Yes, soft-deletes in the same save (via `mark_for_destruction`)                                     | Yes, soft-deletes (via `destroy`)                                                                             | Yes, soft-deletes (via `destroy`)                                      | No (hard-deletes)                               | Yes, soft-deletes (via `destroy`)                                    |
@@ -475,7 +498,7 @@ That said, not everyone shares these opinions, and there's plenty of other optio
 | Tracks who deleted a record         | Yes (`deleted_by`)                                                                                  | No                                                                                                            | No                                                                     | No                                              | No                                                                   |
 | Callbacks                           | `soft_delete`, `restore`, and commit variants                                                       | `destroy`, `restore`, `real_destroy`, and `restore_commit`                                                    | `destroy` and `recover`                                                | `discard` and `undiscard`                       | `destroy`                                                            |
 | Deletion column(s)                  | `deleted_at` (plus `deleted_in` and `deleted_by_id`)                                                | `deleted_at` (configurable, supports sentinel values)                                                         | `deleted_at` (configurable, time, boolean, or string)                  | `discarded_at` (configurable)                   | `deleted_at`                                                         |
-| Sorbet/Tapioca compatibility        | Yes, via inline RBS (compiled into RBIs by Tapioca)                                                 | No signatures                                                                                                 | No signatures                                                          | Callback shims only (via `tapioca annotations`) | No signatures                                                        |
+| Sorbet/Tapioca compatibility        | Yes, via inline RBS (compiled into RBIs by Tapioca), plus a Tapioca DSL compiler for relations      | No signatures                                                                                                 | No signatures                                                          | Callback shims only (via `tapioca annotations`) | No signatures                                                        |
 
 
 

@@ -159,29 +159,34 @@ module SoftDeletable
     # Soft-deletes a record, or hard-deletes it if `permanent` is set.
     # Defaults to hard-deletion for records marked for destruction with `permanent` set.
     #
-    #: (?deleted_in: String, ?deleted_by: ActiveRecord::Base?, ?permanent: bool) -> bool
+    #: (?deleted_in: String, ?deleted_by: ActiveRecord::Base?, ?permanent: bool) -> (self | bool)
     def destroy(deleted_in: SecureRandom.uuid, deleted_by: nil, permanent: marked_for_destruction?)
       return super() if permanent
       return true if deleted? && !deleted_changed?(to: true)
 
-      update(deleted: true, deleted_in:, deleted_by:)
+      reverting_deleted_state_on_failure { update(deleted: true, deleted_in:, deleted_by:) } || false
     end
 
     # Soft-deletes a record, or hard-deletes it if `permanent` is set.
     # Defaults to hard-deletion for records marked for destruction with `permanent` set.
     #
-    #: (?deleted_in: String, ?deleted_by: ActiveRecord::Base?, ?permanent: bool) -> bool
+    #: (?deleted_in: String, ?deleted_by: ActiveRecord::Base?, ?permanent: bool) -> (self | bool)
     def destroy!(deleted_in: SecureRandom.uuid, deleted_by: nil, permanent: marked_for_destruction?)
       # ActiveRecord's destroy! calls destroy, which would soft-delete the record
       return destroy(permanent: true) || _raise_record_not_destroyed if permanent
       return true if deleted? && !deleted_changed?(to: true)
 
-      update!(deleted: true, deleted_in:, deleted_by:)
+      reverting_deleted_state_on_failure { update!(deleted: true, deleted_in:, deleted_by:) }
+    rescue ActiveRecord::RecordNotSaved => error
+      # a soft-delete halted by a callback (e.g. `dependent: :restrict_with_error`) failed to destroy the record
+      raise unless error.record.equal?(self)
+
+      _raise_record_not_destroyed
     end
 
     # Soft-deletes a record without running validations or callbacks, or hard-deletes it if `permanent` is set.
     #
-    #: (?deleted_in: String, ?deleted_by: ActiveRecord::Base?, ?permanent: bool) -> bool
+    #: (?deleted_in: String, ?deleted_by: ActiveRecord::Base?, ?permanent: bool) -> (self | bool)
     def delete(deleted_in: SecureRandom.uuid, deleted_by: nil, permanent: false)
       return super() if permanent
       return true if deleted? && !deleted_changed?(to: true)
@@ -217,6 +222,17 @@ module SoftDeletable
     end
 
   private
+
+    # A record that fails to be soft-deleted is left as it was, as one that fails to be hard-deleted would be.
+    #
+    #: () { () -> bool? } -> bool?
+    def reverting_deleted_state_on_failure
+      previous = attributes.slice('deleted_at', 'deleted_in', 'deleted_by_id')
+      succeeded = false
+      succeeded = yield
+    ensure
+      assign_attributes(previous) unless succeeded
+    end
 
     #: () { () -> void } -> void
     def run_soft_delete_callbacks(&block)

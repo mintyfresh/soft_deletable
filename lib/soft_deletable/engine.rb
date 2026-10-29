@@ -25,6 +25,7 @@ module SoftDeletable
         ActiveRecord::Associations::CollectionProxy.prepend(extensions::CollectionProxyExtension)
         ActiveRecord::Associations::Builder::Association.prepend(extensions::AssociationBuilderExtension)
         ActiveRecord::Associations::Builder::Association.extensions << extensions::IncludesDeletedOption
+        ActiveRecord::Associations::Builder::Association.extensions << extensions::SkipRestrictionOnSoftDeleteOption
         ActiveRecord::Associations::Association.prepend(extensions::AssociationExtension)
         ActiveRecord::Associations::Preloader::Association.prepend(extensions::PreloaderExtension)
         ActiveRecord::Associations::Preloader::ThroughAssociation.prepend(extensions::ThroughPreloaderExtension)

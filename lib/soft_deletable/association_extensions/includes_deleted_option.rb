@@ -12,7 +12,10 @@ module SoftDeletable
       # Through associations are filtered by each of the associations they go through,
       # so the option must be specified on those associations instead.
       #
-      #: (singleton(ActiveRecord::Base) model, ActiveRecord::Reflection::AssociationReflection reflection) -> void
+      #: (
+      #|   singleton(ActiveRecord::Base) model,
+      #|   ActiveRecord::Reflection::AssociationReflection | ActiveRecord::Reflection::ThroughReflection reflection
+      #| ) -> void
       def self.build(model, reflection)
         return unless reflection.options.key?(:includes_deleted)
 

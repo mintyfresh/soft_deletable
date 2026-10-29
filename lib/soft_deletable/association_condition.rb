@@ -63,7 +63,7 @@ module SoftDeletable
       #
       #: (
       #|   ActiveRecord::Reflection::AbstractReflection reflection,
-      #|   Arel::Table table,
+      #|   Arel::Table | Arel::Nodes::TableAlias table,
       #|   deleted: bool,
       #|   deleted_in: String?
       #| ) -> Arel::Nodes::Node
@@ -97,8 +97,8 @@ module SoftDeletable
       #
       #: (
       #|   ActiveRecord::Reflection::AbstractReflection reflection,
-      #|   Arel::Table table,
-      #|   Arel::Table foreign_table,
+      #|   Arel::Table | Arel::Nodes::TableAlias table,
+      #|   Arel::Table | Arel::Nodes::TableAlias foreign_table,
       #|   Class? foreign_klass
       #| ) -> Arel::Nodes::Node
       def join_condition(reflection, table, foreign_table, foreign_klass)
@@ -116,8 +116,8 @@ module SoftDeletable
       #: (
       #|   ActiveRecord::Reflection::AbstractReflection reflection,
       #|   ActiveRecord::Relation scope,
-      #|   Arel::Table table,
-      #|   Arel::Table foreign_table,
+      #|   Arel::Table | Arel::Nodes::TableAlias table,
+      #|   Arel::Table | Arel::Nodes::TableAlias foreign_table,
       #|   Class? foreign_klass
       #| ) -> ActiveRecord::Relation
       def for_join(reflection, scope, table, foreign_table, foreign_klass)

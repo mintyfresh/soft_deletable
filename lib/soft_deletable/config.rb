@@ -3,7 +3,9 @@
 
 module SoftDeletable
   class Config
-    KEYS = %i[delete_job_queue restore_job_queue user_class_name user_table_name logger].freeze
+    KEYS = %i[
+      delete_job_queue restore_job_queue user_class_name user_table_name logger skip_restriction_on_soft_delete
+    ].freeze
 
     #: Symbol | String
     attr_accessor :delete_job_queue
@@ -20,12 +22,16 @@ module SoftDeletable
     #: Logger
     attr_accessor :logger
 
+    #: bool
+    attr_accessor :skip_restriction_on_soft_delete
+
     def initialize
       @delete_job_queue = :default
       @restore_job_queue = :default
       @user_class_name = 'User'
       @user_table_name = nil
       @logger = Rails.logger
+      @skip_restriction_on_soft_delete = false
     end
 
     #: -> (Symbol | String)
