@@ -853,6 +853,38 @@ RSpec.describe Product, type: :model do
         )
       end
     end
+
+    context 'when an existing record is marked as deleted' do
+      let(:product) { described_class.find(inventory.product_id).tap { |product| product.deleted = true } }
+      let!(:inventory) { create(:product_inventory) }
+      let!(:variants) { create_list(:product_variant, 2, product: inventory.product) }
+
+      it 'reads the non-deleted inventory before saving' do
+        expect(product.inventory).to eq(inventory)
+      end
+
+      it 'reads the non-deleted variants before saving', :aggregate_failures do
+        expect(product.variants).to match_array(variants)
+        expect(product.variants.count).to eq(2)
+      end
+
+      it 'preloads the non-deleted variants before saving' do
+        ActiveRecord::Associations::Preloader.new(records: [product], associations: :variants).call
+        expect(product.variants).to match_array(variants)
+      end
+
+      it 'soft-deletes the inventory read before saving', :aggregate_failures do
+        product.inventory
+        expect(save).to be_truthy
+        expect(inventory.reload).to be_deleted.and have_attributes(deleted_in: product.deleted_in)
+      end
+
+      it 'soft-deletes the variants read before saving', :aggregate_failures do
+        product.variants.load
+        expect(save).to be_truthy
+        expect(variants.map(&:reload)).to all be_deleted.and have_attributes(deleted_in: product.deleted_in)
+      end
+    end
   end
 
   describe '#restore' do

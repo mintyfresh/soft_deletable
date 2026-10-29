@@ -10,8 +10,8 @@ module SoftDeletable
       #
       #: -> bool
       def owner_deleted_for_filtering?
-        # while a soft-delete cascades, the owner is deleted in memory but its associated records have yet to be deleted
-        !!owner.try(:deleted?) && !cascading?(:soft_delete)
+        # until a soft-delete is saved (e.g. while validating or cascading), its associated records aren't yet deleted
+        !!owner.try(:deleted_in_database?)
       end
 
     private
@@ -91,11 +91,6 @@ module SoftDeletable
       #: -> bool
       def filters_deleted?
         AssociationCondition.applies?(reflection, klass)
-      end
-
-      #: (Symbol operation) -> bool
-      def cascading?(operation)
-        !!instance_variable_get(:"@__cascading_#{operation}")
       end
     end
   end

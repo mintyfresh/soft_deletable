@@ -135,7 +135,7 @@ module SoftDeletable
       def for_preload(reflection, scope, owners)
         return scope.where(deleted_at: nil) unless together?(reflection)
 
-        deleted, non_deleted = owners.partition { |owner| owner.try(:deleted?) }
+        deleted, non_deleted = owners.partition { |owner| owner.try(:deleted_in_database?) }
         conditions = []
         conditions << scope.where(deleted_at: nil) if non_deleted.any? || (deleted.any? && reflection.belongs_to?)
         conditions << deleted_together_with(scope, deleted) if deleted.any?
@@ -151,7 +151,7 @@ module SoftDeletable
       #|   ActiveRecord::Base record
       #| ) -> bool
       def matches?(reflection, owner, record)
-        return !record.deleted? unless owner.try(:deleted?) && together?(reflection)
+        return !record.deleted? unless owner.try(:deleted_in_database?) && together?(reflection)
         return true if reflection.belongs_to? && !record.deleted?
 
         record.deleted? && owner.deleted_in.present? && record.deleted_in == owner.deleted_in
