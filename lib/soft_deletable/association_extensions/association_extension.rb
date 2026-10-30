@@ -56,12 +56,17 @@ module SoftDeletable
       #
       #: -> void
       def ensure_permanent_cascade_allowed!
-        return if owner.class.try(:soft_deletable?)
+        return if owner.class.try(:soft_deletable?) || allow_permanent_delete?
 
         raise PermanentCascadeError,
               "Cannot cascade the deletion of #{owner.class.name} to #{reflection.name}, " \
               "since #{owner.class.name} is not soft-deletable but #{klass.name} is. " \
-              'Use `dependent: false` and delete the associated records explicitly instead.'
+              'Use `allow_permanent_delete: true` to permanently delete them.'
+      end
+
+      #: -> bool
+      def allow_permanent_delete?
+        options.fetch(:allow_permanent_delete) { SoftDeletable.config.allow_permanent_delete }
       end
 
       #: -> ActiveRecord::Relation?

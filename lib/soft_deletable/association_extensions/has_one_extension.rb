@@ -76,7 +76,7 @@ module SoftDeletable
       #: -> void
       def cascade_permanent_delete_for_dependent_destroy_async
         ids = scope_including_deleted.ids
-        owner.class.soft_delete_async_job.perform_later(klass.name, ids, permanent: true) if ids.any?
+        klass.soft_delete_async_job.perform_later(klass.name, ids, permanent: true) if ids.any?
       end
 
       #: -> void

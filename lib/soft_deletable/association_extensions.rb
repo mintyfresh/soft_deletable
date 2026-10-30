@@ -3,6 +3,7 @@
 
 module SoftDeletable
   module AssociationExtensions
+    autoload :AllowPermanentDeleteOption, 'soft_deletable/association_extensions/allow_permanent_delete_option'
     autoload :AssociationBuilderExtension, 'soft_deletable/association_extensions/association_builder_extension'
     autoload :AssociationExtension, 'soft_deletable/association_extensions/association_extension'
     autoload :AssociationScopeExtension, 'soft_deletable/association_extensions/association_scope_extension'

@@ -144,7 +144,7 @@ module SoftDeletable
         batch_size = owner.class.destroy_association_async_batch_size || DEFAULT_DESTROY_ASSOCIATION_ASYNC_BATCH_SIZE
 
         jobs = ids.each_slice(batch_size).map do |batch|
-          owner.class.soft_delete_async_job.new(klass.name, batch, permanent: true)
+          klass.soft_delete_async_job.new(klass.name, batch, permanent: true)
         end
 
         ActiveJob.perform_all_later(jobs)

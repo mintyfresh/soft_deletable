@@ -24,4 +24,11 @@ SoftDeletable.configure do |config|
   # Defaults to `false`.
   #
   # config.skip_restriction_on_soft_delete = false
+
+  # Whether hard-deleting a record which is not soft-deletable may hard-delete its soft-deletable dependents
+  # (otherwise `SoftDeletable::PermanentCascadeError` is raised).
+  # Can be overridden per association with the `allow_permanent_delete:` option.
+  # Defaults to `false`.
+  #
+  # config.allow_permanent_delete = false
 end

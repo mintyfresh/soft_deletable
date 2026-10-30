@@ -66,6 +66,13 @@ SoftDeletable.configure do |config|
   # Defaults to `false`.
   #
   # config.skip_restriction_on_soft_delete = false
+
+  # Whether hard-deleting a record which is not soft-deletable may hard-delete its soft-deletable dependents
+  # (otherwise `SoftDeletable::PermanentCascadeError` is raised).
+  # Can be overridden per association with the `allow_permanent_delete:` option.
+  # Defaults to `false`.
+  #
+  # config.allow_permanent_delete = false
 end
 ```
 
@@ -254,16 +261,25 @@ Unlike soft-deletion, this includes associated records which were already soft-d
 
 Hard-deleting a record which is *not* soft-deletable will not cascade to dependent soft-deletable records,
 and raises `SoftDeletable::PermanentCascadeError` instead, to prevent unintentional loss of soft-deletable records.
-If this is desirable, use `dependent: false` and delete the associated records explicitly:
+If this is desirable, use the `allow_permanent_delete:` option (which defaults to `config.allow_permanent_delete`):
 
 ```ruby
 class Order < ApplicationRecord
   # not soft-deletable
 
-  has_many :line_items, dependent: false # LineItem is soft-deletable
+  has_many :line_items, dependent: :destroy, allow_permanent_delete: true # LineItem is soft-deletable
+end
+```
 
-  before_destroy do
-    line_items.unscope_deleted.find_each { |line_item| line_item.destroy!(permanent: true) }
+This also allows a concern to declare the association for owners which may or may not be soft-deletable:
+
+```ruby
+module Commentable
+  extend ActiveSupport::Concern
+
+  included do
+    # soft-deletes comments with soft-deletable owners, and hard-deletes them otherwise
+    has_many :comments, as: :commentable, dependent: :destroy, allow_permanent_delete: true
   end
 end
 ```
@@ -381,7 +397,7 @@ When using `has_one` and `has_many` associations, the following `dependent:` beh
 - `:delete` or `:delete_all` - Cascade soft-deletion without triggering validations or callbacks on the dependent records.
 - `:restrict_with_exception` - Raises `ActiveRecord::DeleteRestrictionError` if any non-deleted records are associated.
 - `:restrict_with_error` - Adds an error to the record and halts soft-deletion if any non-deleted records are associated
-  (`destroy` returns `false`, and `destroy!` raises `ActiveRecord::RecordNotDestroyed`).
+(`destroy` returns `false`, and `destroy!` raises `ActiveRecord::RecordNotDestroyed`).
 
 **NOTE:** Cascading dependent callbacks will *only* be processed for other SoftDeletable models upon soft-deletion.
 Restrictions apply to any associated records, but previously soft-deleted records never restrict soft-deletion.
@@ -490,11 +506,12 @@ That said, not everyone shares these opinions, and there's plenty of other optio
 | Relation `.delete_all` soft-deletes | Yes                                                                                                 | Opt-in (`delete_all_enabled`)                                                                                 | Yes                                                                    | No (`discard_all` instead)                      | No                                                                   |
 | Hard-deletion                       | `destroy(permanent: true)`                                                                          | `really_destroy!`                                                                                             | `destroy_fully!`, or destroying twice                                  | `destroy`                                       | `destroy(:force)`                                                    |
 | Cascading soft-deletion             | `dependent: :destroy`, `:destroy_async`, `:delete`, and `:delete_all` (soft-deletable records only) | `dependent: :destroy` (non-paranoid records are hard-deleted)                                                 | `dependent: :destroy`                                                  | No (manual, via callbacks)                      | `dependent: :destroy`                                                |
+| Cascading hard-deletion             | Raises `PermanentCascadeError` (opt-in to hard-delete with `allow_permanent_delete:`)               | Soft-deletes (via `destroy`)                                                                                  | Soft-deletes (via `destroy`)                                           | Hard-deletes                                    | Hard-deletes (via `destroy(:force)`)                                 |
 | `dependent: :restrict_with_*`       | Yes, by non-deleted records (opt-out with `skip_restriction_on_soft_delete:`)                       | Yes (via `destroy` callbacks)                                                                                 | Yes (via `destroy` callbacks)                                          | No (`discard` skips `destroy` callbacks)        | Yes (via `destroy` callbacks)                                        |
 | Cascading restoration               | Deterministic, records deleted in the same operation (`deleted_in`)                                 | Heuristic, opt-in (`recursive: true`), all deleted dependents or those deleted within an optional time window | Heuristic, records deleted within a time window                        | No (manual, via callbacks)                      | Heuristic, records deleted within a time window                      |
 | Deleted-state-aware associations    | Automatic, including joins and eager-loading                                                        | Manual (`belongs_to :x, -> { with_deleted }`)                                                                 | `belongs_to :x, with_deleted: true`                                    | Manual (via joins)                              | Manual                                                               |
 | Nested attributes (`_destroy`)      | Yes, soft-deletes in the same save (via `mark_for_destruction`)                                     | Yes, soft-deletes (via `destroy`)                                                                             | Yes, soft-deletes (via `destroy`)                                      | No (hard-deletes)                               | Yes, soft-deletes (via `destroy`)                                    |
-| Counter caches                      | Yes, only counts non-deleted records                                                                       | Yes, only counts non-deleted records                                                                                 | Yes, double-counts hard deletion                                       | No (counts kept and discarded records)          | Yes, double-counts hard deletion                                     |
+| Counter caches                      | Yes, only counts non-deleted records                                                                | Yes, only counts non-deleted records                                                                          | Yes, double-counts hard deletion                                       | No (counts kept and discarded records)          | Yes, double-counts hard deletion                                     |
 | Tracks who deleted a record         | Yes (`deleted_by`)                                                                                  | No                                                                                                            | No                                                                     | No                                              | No                                                                   |
 | Callbacks                           | `soft_delete`, `restore`, and commit variants                                                       | `destroy`, `restore`, `real_destroy`, and `restore_commit`                                                    | `destroy` and `recover`                                                | `discard` and `undiscard`                       | `destroy`                                                            |
 | Deletion column(s)                  | `deleted_at` (plus `deleted_in` and `deleted_by_id`)                                                | `deleted_at` (configurable, supports sentinel values)                                                         | `deleted_at` (configurable, time, boolean, or string)                  | `discarded_at` (configurable)                   | `deleted_at`                                                         |

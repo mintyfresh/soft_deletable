@@ -284,6 +284,104 @@ RSpec.describe Product, type: :model do
         expect(product.inventory.reload).to have_attributes(deleted?: false)
       end
     end
+
+    context 'when allowing permanent deletion' do
+      let!(:previously_deleted_variant) { create(:product_variant, :deleted, product:) }
+
+      before(:each) do
+        stub_const('PermittingProduct', Class.new(ApplicationRecord) do
+          self.table_name = 'products'
+
+          with_options foreign_key: :product_id, inverse_of: false, allow_permanent_delete: true do
+            has_many :variants, class_name: 'ProductVariant', dependent: :destroy
+            has_one :inventory, class_name: 'ProductInventory', dependent: :delete
+          end
+        end)
+      end
+
+      it 'hard-deletes the product and its dependents, including soft-deleted ones', :aggregate_failures do
+        expect(PermittingProduct.find(product.id).destroy).to be_truthy
+        expect(described_class.exists?(product.id)).to be(false)
+        expect(ProductVariant.where(product_id: product.id)).to be_empty
+        expect(ProductVariant.exists?(previously_deleted_variant.id)).to be(false)
+        expect(ProductInventory.where(product_id: product.id)).to be_empty
+      end
+    end
+
+    context 'when allowing permanent deletion asynchronously' do
+      before(:each) do
+        stub_const('AsyncPermittingProduct', Class.new(ApplicationRecord) do
+          self.table_name = 'products'
+
+          has_many :variants, class_name: 'ProductVariant', foreign_key: :product_id,
+                              inverse_of: false, dependent: :destroy_async, allow_permanent_delete: true
+        end)
+      end
+
+      around(:each) do |example|
+        ActiveRecord::Base.connection.disable_referential_integrity { example.run }
+      end
+
+      it 'enqueues a job to hard-delete the variants', :aggregate_failures do
+        variant_ids = product.variants.ids
+
+        expect(AsyncPermittingProduct.find(product.id).destroy).to be_truthy
+        expect(described_class.exists?(product.id)).to be(false)
+        expect(SoftDeletable::SoftDeleteAsyncJob).to have_been_enqueued
+          .with(ProductVariant.name, match_array(variant_ids), permanent: true)
+      end
+    end
+
+    context 'when allowing permanent deletion by default' do
+      let(:product) { create(:product, :with_variants) }
+
+      before(:each) do
+        allow(SoftDeletable).to receive(:config)
+          .and_return(SoftDeletable.config.dup.tap { |config| config.allow_permanent_delete = true })
+
+        stub_const('ForbiddingProduct', Class.new(ApplicationRecord) do
+          self.table_name = 'products'
+
+          has_many :variants, class_name: 'ProductVariant', foreign_key: :product_id,
+                              inverse_of: false, dependent: :destroy, allow_permanent_delete: false
+        end)
+      end
+
+      it 'hard-deletes the product and its dependents', :aggregate_failures do
+        expect(PlainProductWithVariants.find(product.id).destroy).to be_truthy
+        expect(described_class.exists?(product.id)).to be(false)
+        expect(ProductVariant.where(product_id: product.id)).to be_empty
+      end
+
+      it 'raises when the association overrides the default', :aggregate_failures do
+        expect { ForbiddingProduct.find(product.id).destroy }.to raise_error(SoftDeletable::PermanentCascadeError)
+        expect(described_class.exists?(product.id)).to be(true)
+        expect(product.variants.reload).to all have_attributes(deleted?: false)
+      end
+    end
+
+    it 'rejects allowing permanent deletion for associations that do not delete their dependents' do
+      expect do
+        Class.new(ApplicationRecord) do
+          self.table_name = 'products'
+
+          has_many :variants, class_name: 'ProductVariant', foreign_key: :product_id,
+                              inverse_of: false, dependent: :nullify, allow_permanent_delete: true
+        end
+      end.to raise_error(ArgumentError, /cannot use allow_permanent_delete/)
+    end
+
+    it 'rejects allowing permanent deletion for has_many :through associations' do
+      expect do
+        Class.new(ApplicationRecord) do
+          self.table_name = 'products'
+
+          has_many :variants, class_name: 'ProductVariant', foreign_key: :product_id, inverse_of: false
+          has_many :variant_users, through: :variants, source: :deleted_by,
+                                   dependent: :destroy, allow_permanent_delete: true
+        end
+      end.to raise_error(ArgumentError, /cannot use allow_permanent_delete/)
+    end
   end
 
   describe 'soft-deletion with restricted dependents' do
